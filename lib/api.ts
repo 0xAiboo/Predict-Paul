@@ -1,4 +1,3 @@
-import { API_BASE_URL } from './api-config'
 import type { ApiResponse, PaginatedResponse } from '@/types'
 
 // API 错误类
@@ -37,7 +36,7 @@ async function request<T>(
   const { params, headers, ...restConfig } = config
 
   // 构建完整 URL
-  let url = `${API_BASE_URL}${endpoint}`
+  let url = `${endpoint}`
   if (params) {
     const queryString = buildQueryString(params)
     if (queryString) {

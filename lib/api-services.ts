@@ -1,5 +1,5 @@
 import { get, post } from "./api";
-import { API_ENDPOINTS, API_BASE_URL } from "./api-config";
+import { API_ENDPOINTS } from "./api-config";
 import type {
   Market,
   Analysis,
@@ -96,7 +96,7 @@ export const analysisService = {
       body.session_id = params.session_id;
     }
 
-    fetch(`${API_BASE_URL}${API_ENDPOINTS.analyze}`, {
+    fetch(`${API_ENDPOINTS.analyze}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
