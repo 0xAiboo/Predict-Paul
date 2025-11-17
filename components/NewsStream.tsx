@@ -55,14 +55,14 @@ export default function NewsStream({ onNavigateToThinking }: NewsStreamProps) {
   return (
     <div className="min-h-screen bg-[#0F0F23] pb-32">
       {/* Header */}
-      <Header title="Prediction Markets" showSearch={true} />
+      <Header title="News Stream" showSearch={true} />
 
       {/* Main Content */}
       <div className="px-8 py-6">
         {/* 顶部栏 */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            <h2 className="text-2xl font-bold">Markets</h2>
+            <h2 className="text-2xl font-bold">Trending</h2>
             <button
               onClick={refetch}
               disabled={loading}
