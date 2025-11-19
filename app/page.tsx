@@ -5,14 +5,20 @@ import Sidebar from '@/components/Sidebar'
 import NewsStream from '@/components/NewsStream'
 import NewsAnalysis from '@/components/NewsAnalysis'
 import ThinkingProcess from '@/components/ThinkingProcess'
-import type { HistoryItem } from '@/types'
+import type { HistoryItem, Event } from '@/types'
 
 export default function Home() {
   const [currentPage, setCurrentPage] = useState<'news-stream' | 'news-analysis' | 'thinking-process'>('news-stream')
-  const [thinkingParams, setThinkingParams] = useState<{ eventId?: string; eventTitle?: string; query?: string; sessionId?: string }>({})
+  const [thinkingParams, setThinkingParams] = useState<{ 
+    eventId?: string; 
+    eventTitle?: string; 
+    eventData?: Event;
+    query?: string; 
+    sessionId?: string 
+  }>({})
 
-  const handleNavigateToThinking = (eventId?: string, eventTitle?: string, query?: string, sessionId?: string) => {
-    setThinkingParams({ eventId, eventTitle, query, sessionId })
+  const handleNavigateToThinking = (eventId?: string, eventTitle?: string, query?: string, eventData?: Event) => {
+    setThinkingParams({ eventId, eventTitle, eventData, query })
     setCurrentPage('thinking-process')
   }
 
@@ -53,6 +59,7 @@ export default function Home() {
           <ThinkingProcess 
             eventId={thinkingParams.eventId}
             eventTitle={thinkingParams.eventTitle}
+            eventData={thinkingParams.eventData}
             initialQuery={thinkingParams.query}
             sessionId={thinkingParams.sessionId}
           />

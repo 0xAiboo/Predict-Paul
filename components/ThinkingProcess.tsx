@@ -1,6 +1,18 @@
 "use client";
 
-import { X, Code, Brain, FileText, Lightbulb } from "lucide-react";
+import {
+  X,
+  Code,
+  Brain,
+  FileText,
+  Lightbulb,
+  Sparkles,
+  CheckCircle2,
+  Clock,
+  Zap,
+  TrendingUp,
+  Activity,
+} from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -19,11 +31,13 @@ import type {
   ToolCall,
   ReasoningItem,
   LogItem,
+  Event,
 } from "@/types";
 
 interface ThinkingProcessProps {
   eventId?: string;
   eventTitle?: string;
+  eventData?: Event; // 新增：完整的事件数据
   initialQuery?: string;
   sessionId?: string;
 }
@@ -98,6 +112,7 @@ interface AgentData {
 export default function ThinkingProcess({
   eventId,
   eventTitle,
+  eventData,
   initialQuery = "",
   sessionId,
 }: ThinkingProcessProps) {
@@ -105,6 +120,10 @@ export default function ThinkingProcess({
   const [query, setQuery] = useState(initialQuery);
   const [question, setQuestion] = useState("");
   const [finalText, setFinalText] = useState("");
+  const [finalResult, setFinalResult] = useState(""); // 新增：存储最终结果
+  const [currentSessionId, setCurrentSessionId] = useState(sessionId || "");
+  const [analysisStartTime, setAnalysisStartTime] = useState<Date | null>(null);
+  const [analysisEndTime, setAnalysisEndTime] = useState<Date | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -236,7 +255,7 @@ export default function ThinkingProcess({
       ) {
         return "tech";
       }
-      
+
       // 🐋 持有者数据工具映射到 whales agent
       if (
         toolName.includes("fetch_top_holders") ||
@@ -245,7 +264,7 @@ export default function ThinkingProcess({
       ) {
         return "whales";
       }
-      
+
       if (toolName.includes("social")) return "social";
       if (toolName.includes("news")) return "news";
       if (toolName.includes("tech")) return "tech";
@@ -264,7 +283,8 @@ export default function ThinkingProcess({
   const safeToString = (value: any): string => {
     if (value === null || value === undefined) return "";
     if (typeof value === "string") return value;
-    if (typeof value === "number" || typeof value === "boolean") return String(value);
+    if (typeof value === "number" || typeof value === "boolean")
+      return String(value);
     try {
       return JSON.stringify(value);
     } catch {
@@ -276,7 +296,7 @@ export default function ThinkingProcess({
     const now = new Date();
     // 安全地处理 message 字段，确保能正确处理字符串和非字符串类型
     const messageStr = safeToString(event.message);
-    
+
     setLiveEventStream((prev) =>
       [
         {
@@ -326,14 +346,17 @@ export default function ThinkingProcess({
       extractAgentType(event.type, event.tool_name) ||
       event.agent_type ||
       "social";
-    
+
     // 🔍 调试：记录所有 news_agent 相关事件
     if (event.tool_name?.includes("news") || event.type?.includes("news")) {
       console.log("📰 News Agent 事件:", {
         type: event.type,
         tool_name: event.tool_name,
         agentType,
-        messagePreview: typeof event.message === 'string' ? event.message.substring(0, 100) : event.message
+        messagePreview:
+          typeof event.message === "string"
+            ? event.message.substring(0, 100)
+            : event.message,
       });
     }
 
@@ -341,18 +364,26 @@ export default function ThinkingProcess({
     const updatePreviousAgentStatus = (currentAgent: string) => {
       const agentOrder = ["social", "news", "tech", "whales"];
       const currentIndex = agentOrder.indexOf(currentAgent);
-      
+
       console.log(`🔄 链式更新检查: ${currentAgent}, index: ${currentIndex}`);
-      
+
       if (currentIndex > 0) {
         const previousAgent = agentOrder[currentIndex - 1];
-        console.log(`✅ 自动完成前置 agent: ${previousAgent} (因为 ${currentAgent} 开始)`);
-        
+        console.log(
+          `✅ 自动完成前置 agent: ${previousAgent} (因为 ${currentAgent} 开始)`
+        );
+
         setAgentsData((prev) => {
           const updated = prev.map((agent) => {
             if (agent.id === previousAgent && agent.status !== "completed") {
-              console.log(`   更新 ${previousAgent}: ${agent.status} → completed`);
-              return { ...agent, status: "completed" as const, message: "分析完成" };
+              console.log(
+                `   更新 ${previousAgent}: ${agent.status} → completed`
+              );
+              return {
+                ...agent,
+                status: "completed" as const,
+                message: "分析完成",
+              };
             }
             return agent;
           });
@@ -372,7 +403,9 @@ export default function ThinkingProcess({
         const status = event.status || "thinking";
         const message = safeToString(event.message || event.content);
 
-        console.log(`🤖 Agent 事件: type=${event.type}, agentType=${agentType}, status=${status}`);
+        console.log(
+          `🤖 Agent 事件: type=${event.type}, agentType=${agentType}, status=${status}`
+        );
 
         // 🔄 当 agent 开始 thinking 时，完成前一个 agent
         if (status === "thinking") {
@@ -455,7 +488,11 @@ export default function ThinkingProcess({
       case "tech_agent_output":
       case "whales_agent_output":
         const contentText = safeToString(
-          event.message || event.content || event.data || event.text || event.output
+          event.message ||
+            event.content ||
+            event.data ||
+            event.text ||
+            event.output
         );
 
         // 🎯 当 news_agent_output 开始时，标记 social agent 为已完成
@@ -464,7 +501,11 @@ export default function ThinkingProcess({
           setAgentsData((prev) =>
             prev.map((agent) => {
               if (agent.id === "social" && agent.status !== "completed") {
-                return { ...agent, status: "completed" as const, message: "分析完成" };
+                return {
+                  ...agent,
+                  status: "completed" as const,
+                  message: "分析完成",
+                };
               }
               return agent;
             })
@@ -474,22 +515,30 @@ export default function ThinkingProcess({
         if (contentText) {
           // 🔍 简单过滤：只跳过完整的 JSON 对象，保留所有文本内容
           let shouldInclude = true;
-          
+
           // 只过滤完整的 JSON 对象（包含元数据字段）
           try {
             const parsed = JSON.parse(contentText);
-            if (typeof parsed === 'object' && parsed !== null) {
+            if (typeof parsed === "object" && parsed !== null) {
               const keys = Object.keys(parsed);
-              const hasMetadataKeys = keys.some(key => 
-                ['event', 'tweets', 'metadata', 'raw_data', 'history', 'market', 'holders'].includes(key)
+              const hasMetadataKeys = keys.some((key) =>
+                [
+                  "event",
+                  "tweets",
+                  "metadata",
+                  "raw_data",
+                  "history",
+                  "market",
+                  "holders",
+                ].includes(key)
               );
-              
+
               if (hasMetadataKeys) {
                 console.log("⏭️ 跳过 JSON 元数据 (agent_output case):", {
                   eventType: event.type,
                   agentType,
                   keys: keys.slice(0, 5),
-                  preview: JSON.stringify(parsed).substring(0, 100)
+                  preview: JSON.stringify(parsed).substring(0, 100),
                 });
                 shouldInclude = false;
               }
@@ -503,7 +552,7 @@ export default function ThinkingProcess({
               eventType: event.type,
               agentType,
               length: contentText.length,
-              preview: contentText.substring(0, 50)
+              preview: contentText.substring(0, 50),
             });
 
             setAgentsData((prev) =>
@@ -537,6 +586,23 @@ export default function ThinkingProcess({
 
       case "done":
         setIsStreaming(false);
+        setAnalysisEndTime(new Date());
+
+        // 保存最终结果和会话ID
+        if (event.final_result) {
+          setFinalResult(event.final_result);
+        }
+        if (event.session_id) {
+          setCurrentSessionId(event.session_id);
+        }
+
+        console.log("✅ 分析完成:", {
+          session_id: event.session_id,
+          final_result: event.final_result,
+          duration: analysisStartTime
+            ? (new Date().getTime() - analysisStartTime.getTime()) / 1000
+            : 0,
+        });
         break;
 
       case "log":
@@ -550,36 +616,42 @@ export default function ThinkingProcess({
             // Python dict 格式转 JSON
             const jsonStr = safeToString(event.message)
               .replace(/'/g, '"')
-              .replace(/True/g, 'true')
-              .replace(/False/g, 'false');
-            
+              .replace(/True/g, "true")
+              .replace(/False/g, "false");
+
             const orderbookData = JSON.parse(jsonStr);
-            
+
             console.log("📊 收到订单簿数据:", {
               agentType,
               market: orderbookData.market?.substring(0, 20) + "...",
               bidsCount: orderbookData.bids?.length,
-              asksCount: orderbookData.asks?.length
+              asksCount: orderbookData.asks?.length,
             });
-            
+
             setAgentsData((prev) =>
               prev.map((agent) => {
                 if (agent.type === agentType || agent.id === agentType) {
                   return {
                     ...agent,
-                    orderbooks: [...agent.orderbooks, orderbookData]
+                    orderbooks: [...agent.orderbooks, orderbookData],
                   };
                 }
                 return agent;
               })
             );
-            
+
             // 🎯 当收到订单簿数据时，标记 news agent 为已完成
-            console.log("✅ 收到 fetch_current_orderbook 数据，标记 news agent 为已完成");
+            console.log(
+              "✅ 收到 fetch_current_orderbook 数据，标记 news agent 为已完成"
+            );
             setAgentsData((prev) =>
               prev.map((agent) => {
                 if (agent.id === "news" && agent.status !== "completed") {
-                  return { ...agent, status: "completed" as const, message: "分析完成" };
+                  return {
+                    ...agent,
+                    status: "completed" as const,
+                    message: "分析完成",
+                  };
                 }
                 return agent;
               })
@@ -588,38 +660,44 @@ export default function ThinkingProcess({
             console.error("⚠️ 解析订单簿数据失败:", e);
           }
         }
-        
+
         // 🔍 检查是否是价格历史数据
         else if (event.tool_name === "fetch_price_history") {
           try {
             const jsonStr = safeToString(event.message).replace(/'/g, '"');
             const priceData = JSON.parse(jsonStr);
-            
+
             console.log("📈 收到价格历史数据:", {
               agentType,
               historyCount: priceData.history?.length,
               firstPrice: priceData.history?.[0]?.p,
-              lastPrice: priceData.history?.[priceData.history.length - 1]?.p
+              lastPrice: priceData.history?.[priceData.history.length - 1]?.p,
             });
-            
+
             setAgentsData((prev) =>
               prev.map((agent) => {
                 if (agent.type === agentType || agent.id === agentType) {
                   return {
                     ...agent,
-                    priceHistory: [...agent.priceHistory, priceData]
+                    priceHistory: [...agent.priceHistory, priceData],
                   };
                 }
                 return agent;
               })
             );
-            
+
             // 🎯 当收到价格历史数据时，标记 news agent 为已完成
-            console.log("✅ 收到 fetch_price_history 数据，标记 news agent 为已完成");
+            console.log(
+              "✅ 收到 fetch_price_history 数据，标记 news agent 为已完成"
+            );
             setAgentsData((prev) =>
               prev.map((agent) => {
                 if (agent.id === "news" && agent.status !== "completed") {
-                  return { ...agent, status: "completed" as const, message: "分析完成" };
+                  return {
+                    ...agent,
+                    status: "completed" as const,
+                    message: "分析完成",
+                  };
                 }
                 return agent;
               })
@@ -628,50 +706,60 @@ export default function ThinkingProcess({
             console.error("⚠️ 解析价格历史数据失败:", e);
           }
         }
-        
+
         // 🐋 检查是否是持有者数据
         else if (event.tool_name === "fetch_top_holders") {
           try {
             // 解析持有者数据（可能是数组格式）
             const message = event.message;
             let holdersDataArray: TopHoldersData[] = [];
-            
+
             if (Array.isArray(message)) {
               // 如果直接是数组
               holdersDataArray = message;
-            } else if (typeof message === 'string') {
+            } else if (typeof message === "string") {
               // 如果是字符串，尝试解析
-              const jsonStr = message.replace(/'/g, '"')
-                .replace(/True/g, 'true')
-                .replace(/False/g, 'false');
+              const jsonStr = message
+                .replace(/'/g, '"')
+                .replace(/True/g, "true")
+                .replace(/False/g, "false");
               const parsed = JSON.parse(jsonStr);
               holdersDataArray = Array.isArray(parsed) ? parsed : [parsed];
             }
-            
+
             console.log("🐋 收到持有者数据:", {
               agentType,
               tokensCount: holdersDataArray.length,
-              totalHolders: holdersDataArray.reduce((sum, token) => sum + (token.holders?.length || 0), 0)
+              totalHolders: holdersDataArray.reduce(
+                (sum, token) => sum + (token.holders?.length || 0),
+                0
+              ),
             });
-            
+
             setAgentsData((prev) =>
               prev.map((agent) => {
                 if (agent.type === agentType || agent.id === agentType) {
                   return {
                     ...agent,
-                    topHolders: [...agent.topHolders, ...holdersDataArray]
+                    topHolders: [...agent.topHolders, ...holdersDataArray],
                   };
                 }
                 return agent;
               })
             );
-            
+
             // 🎯 当收到持有者数据时，标记 tech agent 为已完成
-            console.log("✅ 收到 fetch_top_holders 数据，标记 tech agent 为已完成");
+            console.log(
+              "✅ 收到 fetch_top_holders 数据，标记 tech agent 为已完成"
+            );
             setAgentsData((prev) =>
               prev.map((agent) => {
                 if (agent.id === "tech" && agent.status !== "completed") {
-                  return { ...agent, status: "completed" as const, message: "分析完成" };
+                  return {
+                    ...agent,
+                    status: "completed" as const,
+                    message: "分析完成",
+                  };
                 }
                 return agent;
               })
@@ -680,23 +768,23 @@ export default function ThinkingProcess({
             console.error("⚠️ 解析持有者数据失败:", e, event.message);
           }
         }
-        
+
         // 📰 检查是否是新闻注释（news_agent_annotation）- 这是最终分析结果
         else if (event.tool_name === "news_agent_annotation") {
           const annotationText = safeToString(event.message);
           if (annotationText) {
             console.log("📰 收到新闻注释（最终结果）:", {
               agentType,
-              annotation: annotationText.substring(0, 100)
+              annotation: annotationText.substring(0, 100),
             });
-            
+
             setAgentsData((prev) =>
               prev.map((agent) => {
                 if (agent.type === agentType || agent.id === agentType) {
                   // 将注释添加到 annotations 数组中，支持多个注释
                   return {
                     ...agent,
-                    annotations: [...agent.annotations, annotationText]
+                    annotations: [...agent.annotations, annotationText],
                   };
                 }
                 return agent;
@@ -704,42 +792,47 @@ export default function ThinkingProcess({
             );
           }
         }
-        
-        // 🐦 检查是否是社交媒体引用（social_citations）
+
         else if (event.tool_name === "social_citations") {
           try {
             const message = event.message;
             let citationData: TwitterCitation | null = null;
-            
-            if (typeof message === 'object' && message !== null) {
+
+            if (typeof message === "object" && message !== null) {
               citationData = message as TwitterCitation;
-            } else if (typeof message === 'string') {
+            } else if (typeof message === "string") {
               // 如果是字符串，尝试解析
-              const jsonStr = message.replace(/'/g, '"')
-                .replace(/True/g, 'true')
-                .replace(/False/g, 'false');
+              const jsonStr = message
+                .replace(/'/g, '"')
+                .replace(/True/g, "true")
+                .replace(/False/g, "false");
               citationData = JSON.parse(jsonStr);
             }
-            
+
             if (citationData) {
               console.log("🐦 收到 Twitter 引用:", {
                 agentType,
                 user: citationData.user_screen_name,
-                textPreview: citationData.full_text?.substring(0, 50)
+                textPreview: citationData.full_text?.substring(0, 50),
               });
-              
+
               setAgentsData((prev) =>
                 prev.map((agent) => {
                   if (agent.type === agentType || agent.id === agentType) {
                     // 收到第一个 citation 时，标记 social agent 为已完成
-                    const shouldComplete = agent.citations.length === 0 && agent.id === "social";
+                    const shouldComplete =
+                      agent.citations.length === 0 && agent.id === "social";
                     if (shouldComplete) {
-                      console.log("✅ 收到第一个 social_citation，标记 social agent 为已完成");
+                      console.log(
+                        "✅ 收到第一个 social_citation，标记 social agent 为已完成"
+                      );
                     }
                     return {
                       ...agent,
                       citations: [...agent.citations, citationData],
-                      ...(shouldComplete ? { status: "completed" as const, message: "分析完成" } : {})
+                      ...(shouldComplete
+                        ? { status: "completed" as const, message: "分析完成" }
+                        : {}),
                     };
                   }
                   return agent;
@@ -750,13 +843,14 @@ export default function ThinkingProcess({
             console.error("⚠️ 解析 Twitter 引用失败:", e, event.message);
           }
         }
-        
+
         // 检查是否是需要显示的内容：content 或 agent_output
-        else if (event.tool_name && (
-          event.tool_name.includes("content") || 
-          event.tool_name.includes("agent_output") ||
-          event.tool_name.includes("_output")
-        )) {
+        else if (
+          event.tool_name &&
+          (event.tool_name.includes("content") ||
+            event.tool_name.includes("agent_output") ||
+            event.tool_name.includes("_output"))
+        ) {
           const contentText = safeToString(event.message || event.content);
 
           console.log("🔍 检测到输出事件 (log case):", {
@@ -765,28 +859,36 @@ export default function ThinkingProcess({
             agentType,
             messageLength: contentText.length,
             message: event.message,
-            preview: contentText.substring(0, 100)
+            preview: contentText.substring(0, 100),
           });
 
           if (contentText) {
             // 🔍 简单过滤：只跳过完整的 JSON 对象，保留所有文本内容
             let shouldInclude = true;
-            
+
             // 只过滤完整的 JSON 对象（包含元数据字段）
             try {
               const parsed = JSON.parse(contentText);
-              if (typeof parsed === 'object' && parsed !== null) {
+              if (typeof parsed === "object" && parsed !== null) {
                 const keys = Object.keys(parsed);
-                const hasMetadataKeys = keys.some(key => 
-                  ['event', 'tweets', 'metadata', 'raw_data', 'history', 'market', 'holders'].includes(key)
+                const hasMetadataKeys = keys.some((key) =>
+                  [
+                    "event",
+                    "tweets",
+                    "metadata",
+                    "raw_data",
+                    "history",
+                    "market",
+                    "holders",
+                  ].includes(key)
                 );
-                
+
                 if (hasMetadataKeys) {
                   console.log("⏭️ 跳过 JSON 元数据 (log case):", {
                     agentType,
-                    type: Array.isArray(parsed) ? 'array' : 'object',
+                    type: Array.isArray(parsed) ? "array" : "object",
                     keys: keys.slice(0, 5),
-                    preview: JSON.stringify(parsed).substring(0, 100)
+                    preview: JSON.stringify(parsed).substring(0, 100),
                   });
                   shouldInclude = false;
                 }
@@ -802,7 +904,7 @@ export default function ThinkingProcess({
                 agentType,
                 length: contentText.length,
                 content: contentText,
-                preview: contentText.substring(0, 100)
+                preview: contentText.substring(0, 100),
               });
 
               setContentChunks((prev) =>
@@ -820,7 +922,7 @@ export default function ThinkingProcess({
                     }),
                   },
                 ].slice(-100)
-              ); 
+              );
 
               setAgentsData((prev) => {
                 const updated = prev.map((agent) => {
@@ -881,7 +983,6 @@ export default function ThinkingProcess({
           timestamp: new Date().toISOString(),
         };
 
-      
         setAgentsData((prev) =>
           prev.map((agent) => {
             if (agent.type === agentType || agent.id === agentType) {
@@ -969,17 +1070,21 @@ export default function ThinkingProcess({
         const finalTextContent = event.data || event.content || "";
         console.log("📝 Final Text:", finalTextContent);
         setFinalText(finalTextContent);
-        
+
         // 🔄 当最终结果输出时，完成最后一个 agent (whales)
         setAgentsData((prev) =>
           prev.map((agent) => {
             if (agent.id === "whales" && agent.status !== "completed") {
-              return { ...agent, status: "completed" as const, message: "分析完成" };
+              return {
+                ...agent,
+                status: "completed" as const,
+                message: "分析完成",
+              };
             }
             return agent;
           })
         );
-        
+
         // 自动切换到研究结果标签页
         setActiveTab("result");
         break;
@@ -1009,7 +1114,7 @@ export default function ThinkingProcess({
               prev.map((agent) => {
                 if (agent.type === agentType || agent.id === agentType) {
                   const newContent = agent.thinkingContent + contentText;
-                 
+
                   return { ...agent, thinkingContent: newContent };
                 }
                 return agent;
@@ -1047,9 +1152,12 @@ export default function ThinkingProcess({
       }))
     );
     setFinalText("");
+    setFinalResult("");
     setError(null);
     setIsStreaming(true);
     setLoading(true);
+    setAnalysisStartTime(new Date());
+    setAnalysisEndTime(null);
     setSelectedAgentId("social");
 
     if (eventTitle) {
@@ -1072,7 +1180,6 @@ export default function ThinkingProcess({
     if (sessionId) {
       analyzeParams.session_id = sessionId;
     }
-
 
     eventSourceRef.current = analysisService.createAnalyzeStream(
       analyzeParams,
@@ -1185,31 +1292,317 @@ export default function ThinkingProcess({
               </div>
             )}
 
-          {/* Question Card */}
+          {/* Enhanced Question Card - 像 EventCard 一样展示 */}
           {question && (
-            <div className="bg-gradient-primary rounded-2xl p-6 mb-6">
-              <p className="text-lg">{question}</p>
-              {isStreaming && (
-                <div className="mt-3 flex items-center gap-2">
-                  <div className="flex gap-1">
-                    <div
-                      className="w-2 h-2 bg-purple-300 rounded-full animate-bounce"
-                      style={{ animationDelay: "0ms" }}
-                    ></div>
-                    <div
-                      className="w-2 h-2 bg-purple-300 rounded-full animate-bounce"
-                      style={{ animationDelay: "150ms" }}
-                    ></div>
-                    <div
-                      className="w-2 h-2 bg-purple-300 rounded-full animate-bounce"
-                      style={{ animationDelay: "300ms" }}
-                    ></div>
+            <div className="bg-[#1A1A2E] border-2 border-purple-500/30 rounded-2xl overflow-hidden mb-6 hover:border-purple-500 transition-all">
+              {/* 图片区域 - 如果有事件图片 */}
+              {eventData?.image && (
+                <div className="relative h-48 w-full overflow-hidden">
+                  <img
+                    src={eventData.image}
+                    alt={question}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#1A1A2E] via-transparent to-transparent" />
+
+                  {/* 右上角标签 */}
+                  <div className="absolute top-3 right-3 flex gap-2">
+                    {eventData.featured && (
+                      <span className="flex items-center gap-1 px-2 py-1 bg-yellow-500/20 backdrop-blur-sm border border-yellow-500/30 rounded-full text-xs font-semibold text-yellow-400">
+                        <Sparkles className="w-3 h-3 fill-yellow-400" />
+                        Featured
+                      </span>
+                    )}
+                    {eventData.new && (
+                      <span className="flex items-center gap-1 px-2 py-1 bg-purple-500/20 backdrop-blur-sm border border-purple-500/30 rounded-full text-xs font-semibold text-purple-400">
+                        <Sparkles className="w-3 h-3" />
+                        New
+                      </span>
+                    )}
                   </div>
-                  <span className="text-sm text-purple-300">
-                    AI 正在分析中...
-                  </span>
                 </div>
               )}
+
+              {/* 头部 - 带渐变背景 */}
+              <div className="bg-gradient-to-r from-purple-600/20 to-pink-600/20 p-6 border-b border-gray-800">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Brain className="w-5 h-5 text-purple-400" />
+                      {/* <h3 className="text-sm font-semibold text-purple-400 uppercase tracking-wide">
+                        AI 分析会话
+                      </h3> */}
+                    </div>
+                    <p className="text-xl font-bold leading-relaxed mb-3">
+                      {question}
+                    </p>
+
+                    {/* 事件描述 */}
+                    {eventData?.description && (
+                      <p className="text-sm text-gray-400 line-clamp-2 mb-3">
+                        {eventData.description}
+                      </p>
+                    )}
+
+                    {/* 市场统计 */}
+                    {eventData && (
+                      <div className="flex gap-4 flex-wrap text-sm">
+                        {eventData.volume24hr !== undefined && (
+                          <div className="flex items-center gap-1.5">
+                            <TrendingUp className="w-4 h-4 text-green-400" />
+                            <span className="text-gray-400">24h:</span>
+                            <span className="font-semibold text-green-400">
+                              ${(eventData.volume24hr / 1000000).toFixed(2)}M
+                            </span>
+                          </div>
+                        )}
+                        {eventData.liquidity !== undefined && (
+                          <div className="flex items-center gap-1.5">
+                            <Zap className="w-4 h-4 text-blue-400" />
+                            <span className="text-gray-400">Liquidity:</span>
+                            <span className="font-semibold text-blue-400">
+                              ${(eventData.liquidity / 1000000).toFixed(2)}M
+                            </span>
+                          </div>
+                        )}
+                        {eventData.markets && eventData.markets.length > 0 && (
+                          <div className="flex items-center gap-1.5">
+                            <FileText className="w-4 h-4 text-purple-400" />
+                            <span className="text-gray-400">Markets:</span>
+                            <span className="font-semibold text-purple-400">
+                              {eventData.markets.length}
+                            </span>
+                          </div>
+                        )}
+                        {eventData.commentCount !== undefined &&
+                          eventData.commentCount > 0 && (
+                            <div className="flex items-center gap-1.5">
+                              <Brain className="w-4 h-4 text-gray-400" />
+                              <span className="text-gray-400">Comments:</span>
+                              <span className="font-semibold text-gray-300">
+                                {eventData.commentCount}
+                              </span>
+                            </div>
+                          )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 状态标签 */}
+                  <div className="flex flex-col gap-2">
+                    {/* {isStreaming ? (
+                      <span className="flex items-center gap-2 px-3 py-1.5 bg-yellow-500/20 border border-yellow-500/30 rounded-full text-xs font-semibold text-yellow-400 whitespace-nowrap">
+                        <Activity className="w-3 h-3 animate-pulse" />
+                        分析中
+                      </span>
+                    ) : finalResult || finalText ? (
+                      <span className="flex items-center gap-2 px-3 py-1.5 bg-green-500/20 border border-green-500/30 rounded-full text-xs font-semibold text-green-400 whitespace-nowrap">
+                        <CheckCircle2 className="w-3 h-3" />
+                        已完成
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-2 px-3 py-1.5 bg-gray-500/20 border border-gray-500/30 rounded-full text-xs font-semibold text-gray-400 whitespace-nowrap">
+                        <Clock className="w-3 h-3" />
+                        准备中
+                      </span>
+                    )} */}
+
+                    {/* {eventId && (
+                      <span className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/20 border border-blue-500/30 rounded-full text-xs font-semibold text-blue-400 whitespace-nowrap">
+                        <TrendingUp className="w-3 h-3" />
+                        Event
+                      </span>
+                    )}
+                    
+                    {!eventId && initialQuery && (
+                      <span className="flex items-center gap-2 px-3 py-1.5 bg-purple-500/20 border border-purple-500/30 rounded-full text-xs font-semibold text-purple-400 whitespace-nowrap">
+                        <Brain className="w-3 h-3" />
+                        Query
+                      </span>
+                    )} */}
+                  </div>
+                </div>
+              </div>
+
+              {/* 市场选项展示（如果有） */}
+              {eventData?.markets && eventData.markets.length > 0 && (
+                <div className="p-6 border-b border-gray-800 bg-[#0F0F23]/50">
+                  {/* <h4 className="text-sm font-semibold text-gray-400 mb-3 flex items-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    市场选项
+                  </h4> */}
+                  <div className="space-y-2">
+                    {eventData.markets.slice(0, 3).map((market) => {
+                      try {
+                        const prices = JSON.parse(market.outcomePrices);
+                        const probability = Math.round(
+                          parseFloat(prices[0]) * 100
+                        );
+                        const isHigh = probability >= 70;
+                        const isMedium = probability >= 40 && probability < 70;
+
+                        return (
+                          <div
+                            key={market.id}
+                            className="flex items-center justify-between p-3 bg-[#1A1A2E] rounded-lg border border-gray-800"
+                          >
+                            <span className="text-sm font-medium flex-1 truncate">
+                              {market.groupItemTitle}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <div className="w-16 h-2 bg-gray-800 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full transition-all ${
+                                    isHigh
+                                      ? "bg-green-500"
+                                      : isMedium
+                                      ? "bg-yellow-500"
+                                      : "bg-red-500"
+                                  }`}
+                                  style={{ width: `${probability}%` }}
+                                />
+                              </div>
+                              <span
+                                className={`text-sm font-bold w-10 text-right ${
+                                  isHigh
+                                    ? "text-green-400"
+                                    : isMedium
+                                    ? "text-yellow-400"
+                                    : "text-red-400"
+                                }`}
+                              >
+                                {probability}%
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      } catch {
+                        return null;
+                      }
+                    })}
+                    {eventData.markets.length > 3 && (
+                      <div className="text-xs text-center text-gray-500 pt-1">
+                        +{eventData.markets.length - 3} more options
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 内容区域 */}
+              <div className="p-6">
+                {/* 分析进度 - 始终显示，但完成后高度限制 */}
+                {(isStreaming ||
+                  agentsData.some((a) => a.status !== "waiting")) && (
+                  <div
+                    className={`mb-6 p-4 bg-purple-500/10 rounded-lg border border-purple-500/20 transition-all ${
+                      !isStreaming && (finalResult || finalText)
+                        ? "max-h-20 overflow-y-auto"
+                        : ""
+                    }`}
+                    style={{
+                      scrollbarWidth: "thin",
+                      scrollbarColor:
+                        !isStreaming && (finalResult || finalText)
+                          ? "rgba(168, 85, 247, 0.5) transparent"
+                          : undefined,
+                    }}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2"></div>
+                      {analysisStartTime && (
+                        <span className="text-xs text-gray-400">
+                          {isStreaming
+                            ? `${Math.floor(
+                                (new Date().getTime() -
+                                  analysisStartTime.getTime()) /
+                                  1000
+                              )}s`
+                            : analysisEndTime
+                            ? `${Math.floor(
+                                (analysisEndTime.getTime() -
+                                  analysisStartTime.getTime()) /
+                                  1000
+                              )}s`
+                            : ""}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* 活动的 Agents */}
+                    {/* <div className="flex gap-2 flex-wrap">
+                      {agentsData
+                        .filter(agent => agent.status === 'thinking' || agent.status === 'completed')
+                        .map(agent => (
+                          <div
+                            key={agent.id}
+                            className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs ${
+                              agent.status === 'completed'
+                                ? 'bg-green-500/20 text-green-400'
+                                : 'bg-yellow-500/20 text-yellow-400'
+                            }`}
+                          >
+                            <span>{agent.icon}</span>
+                            <span>{agent.name}</span>
+                            {agent.status === 'completed' && <CheckCircle2 className="w-3 h-3" />}
+                            {agent.status === 'thinking' && <Activity className="w-3 h-3 animate-pulse" />}
+                          </div>
+                        ))}
+                    </div> */}
+                  </div>
+                )}
+
+                {/* <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                  {currentSessionId && (
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs text-gray-500">Session ID</span>
+                      <span className="text-sm font-mono text-purple-400 truncate" title={currentSessionId}>
+                        {currentSessionId.slice(0, 8)}...
+                      </span>
+                    </div>
+                  )}
+                  
+                  {analysisStartTime && (
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs text-gray-500">分析时长</span>
+                      <span className="text-sm font-semibold text-blue-400">
+                        {analysisEndTime
+                          ? `${Math.floor((analysisEndTime.getTime() - analysisStartTime.getTime()) / 1000)}s`
+                          : `${Math.floor((new Date().getTime() - analysisStartTime.getTime()) / 1000)}s`}
+                      </span>
+                    </div>
+                  )}
+                  
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs text-gray-500">Agents</span>
+                    <span className="text-sm font-semibold text-green-400">
+                      {agentsData.filter(a => a.status === 'completed').length} / {agentsData.length}
+                    </span>
+                  </div>
+                  
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs text-gray-500">类型</span>
+                    <span className="text-sm font-semibold text-gray-300">
+                      {eventId ? '事件分析' : '查询分析'}
+                    </span>
+                  </div>
+                </div> */}
+
+                {/* 最终结果预览 */}
+                {finalResult && !isStreaming && (
+                  <div className="p-4 bg-green-500/10 rounded-lg border border-green-500/20">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Sparkles className="w-4 h-4 text-green-400" />
+                      <h4 className="text-sm font-semibold text-green-400">
+                        分析结论
+                      </h4>
+                    </div>
+                    <p className="text-base text-gray-200 leading-relaxed">
+                      {finalResult}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -1293,25 +1686,46 @@ export default function ThinkingProcess({
                       remarkPlugins={[remarkGfm]}
                       components={{
                         h1: ({ node, ...props }) => (
-                          <h1 className="text-3xl font-bold text-white mt-6 mb-4" {...props} />
+                          <h1
+                            className="text-3xl font-bold text-white mt-6 mb-4"
+                            {...props}
+                          />
                         ),
                         h2: ({ node, ...props }) => (
-                          <h2 className="text-2xl font-bold text-white mt-5 mb-3" {...props} />
+                          <h2
+                            className="text-2xl font-bold text-white mt-5 mb-3"
+                            {...props}
+                          />
                         ),
                         h3: ({ node, ...props }) => (
-                          <h3 className="text-xl font-semibold text-gray-100 mt-4 mb-2" {...props} />
+                          <h3
+                            className="text-xl font-semibold text-gray-100 mt-4 mb-2"
+                            {...props}
+                          />
                         ),
                         h4: ({ node, ...props }) => (
-                          <h4 className="text-lg font-semibold text-gray-200 mt-3 mb-2" {...props} />
+                          <h4
+                            className="text-lg font-semibold text-gray-200 mt-3 mb-2"
+                            {...props}
+                          />
                         ),
                         p: ({ node, ...props }) => (
-                          <p className="text-gray-100 mb-3 leading-relaxed" {...props} />
+                          <p
+                            className="text-gray-100 mb-3 leading-relaxed"
+                            {...props}
+                          />
                         ),
                         ul: ({ node, ...props }) => (
-                          <ul className="list-disc list-inside mb-4 space-y-2 text-gray-100" {...props} />
+                          <ul
+                            className="list-disc list-inside mb-4 space-y-2 text-gray-100"
+                            {...props}
+                          />
                         ),
                         ol: ({ node, ...props }) => (
-                          <ol className="list-decimal list-inside mb-4 space-y-2 text-gray-100" {...props} />
+                          <ol
+                            className="list-decimal list-inside mb-4 space-y-2 text-gray-100"
+                            {...props}
+                          />
                         ),
                         li: ({ node, ...props }) => (
                           <li className="text-gray-100 ml-2" {...props} />
@@ -1325,13 +1739,22 @@ export default function ThinkingProcess({
                           />
                         ),
                         blockquote: ({ node, ...props }) => (
-                          <blockquote className="border-l-4 border-white/50 pl-4 py-2 mb-3 text-gray-200 italic bg-white/5" {...props} />
+                          <blockquote
+                            className="border-l-4 border-white/50 pl-4 py-2 mb-3 text-gray-200 italic bg-white/5"
+                            {...props}
+                          />
                         ),
                         code: ({ node, inline, ...props }: any) =>
                           inline ? (
-                            <code className="bg-white/10 text-gray-100 px-1.5 py-0.5 rounded text-sm" {...props} />
+                            <code
+                              className="bg-white/10 text-gray-100 px-1.5 py-0.5 rounded text-sm"
+                              {...props}
+                            />
                           ) : (
-                            <code className="block bg-black/30 text-gray-100 p-4 rounded-lg mb-3 overflow-x-auto text-sm" {...props} />
+                            <code
+                              className="block bg-black/30 text-gray-100 p-4 rounded-lg mb-3 overflow-x-auto text-sm"
+                              {...props}
+                            />
                           ),
                         strong: ({ node, ...props }) => (
                           <strong className="font-bold text-white" {...props} />
@@ -1344,14 +1767,23 @@ export default function ThinkingProcess({
                         ),
                         table: ({ node, ...props }) => (
                           <div className="overflow-x-auto mb-4">
-                            <table className="min-w-full border border-white/20" {...props} />
+                            <table
+                              className="min-w-full border border-white/20"
+                              {...props}
+                            />
                           </div>
                         ),
                         th: ({ node, ...props }) => (
-                          <th className="border border-white/20 px-3 py-2 bg-white/10 text-white font-semibold text-left" {...props} />
+                          <th
+                            className="border border-white/20 px-3 py-2 bg-white/10 text-white font-semibold text-left"
+                            {...props}
+                          />
                         ),
                         td: ({ node, ...props }) => (
-                          <td className="border border-white/20 px-3 py-2 text-gray-100" {...props} />
+                          <td
+                            className="border border-white/20 px-3 py-2 text-gray-100"
+                            {...props}
+                          />
                         ),
                       }}
                     >
@@ -1371,363 +1803,510 @@ export default function ThinkingProcess({
 
           {/* 思考过程标签页 - 显示完整的 Agent 调用过程 */}
           {activeTab === "thinking" && (
-          <>
-          <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6">
-            {/* Left Column - Agent Cards */}
-            <div className="space-y-4">
-              {agentsData.map((agent, index) => {
-                const isSelected = agent.id === selectedAgentId;
-                const isActive = agent.status === "thinking";
-                const isCompleted = agent.status === "completed";
-                const isWaiting = agent.status === "waiting";
+            <>
+              <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6">
+                {/* Left Column - Agent Cards */}
+                <div className="space-y-4">
+                  {agentsData.map((agent, index) => {
+                    const isSelected = agent.id === selectedAgentId;
+                    const isActive = agent.status === "thinking";
+                    const isCompleted = agent.status === "completed";
+                    const isWaiting = agent.status === "waiting";
 
-                return (
-                  <button
-                    key={agent.id}
-                    onClick={() => setSelectedAgentId(agent.id)}
-                    className={`w-full text-left rounded-2xl p-6 transition-all duration-500 ease-in-out animate-fadeInUp ${
-                      isSelected
-                        ? "bg-gradient-primary scale-[1.02]"
-                        : "bg-[#1A1A2E] border border-gray-800 hover:border-gray-700"
-                    } ${
-                      isActive
-                        ? "ring-2 ring-purple-500 ring-opacity-50 animate-pulse-slow"
-                        : ""
-                    }`}
-                    style={{
-                      animationDelay: `${index * 100}ms`,
-                      animationFillMode: "both",
-                    }}
-                  >
-                    <div className="flex items-start justify-between mb-4">
-                      <h3 className="text-lg flex-1">{agent.message}</h3>
-                      {isActive && (
-                        <div className="flex gap-1 ml-2">
+                    return (
+                      <button
+                        key={agent.id}
+                        onClick={() => setSelectedAgentId(agent.id)}
+                        className={`w-full text-left rounded-2xl p-6 transition-all duration-500 ease-in-out animate-fadeInUp ${
+                          isSelected
+                            ? "bg-gradient-primary scale-[1.02]"
+                            : "bg-[#1A1A2E] border border-gray-800 hover:border-gray-700"
+                        } ${
+                          isActive
+                            ? "ring-2 ring-purple-500 ring-opacity-50 animate-pulse-slow"
+                            : ""
+                        }`}
+                        style={{
+                          animationDelay: `${index * 100}ms`,
+                          animationFillMode: "both",
+                        }}
+                      >
+                        <div className="flex items-start justify-between mb-4">
+                          <h3 className="text-lg flex-1">{agent.message}</h3>
+                          {isActive && (
+                            <div className="flex gap-1 ml-2">
+                              <div
+                                className="w-1.5 h-1.5 bg-purple-300 rounded-full animate-bounce"
+                                style={{ animationDelay: "0ms" }}
+                              ></div>
+                              <div
+                                className="w-1.5 h-1.5 bg-purple-300 rounded-full animate-bounce"
+                                style={{ animationDelay: "150ms" }}
+                              ></div>
+                              <div
+                                className="w-1.5 h-1.5 bg-purple-300 rounded-full animate-bounce"
+                                style={{ animationDelay: "300ms" }}
+                              ></div>
+                            </div>
+                          )}
+                          {isCompleted && (
+                            <div className="ml-2">
+                              <svg
+                                className="w-5 h-5 text-green-400"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M5 13l4 4L19 7"
+                                />
+                              </svg>
+                            </div>
+                          )}
+                          {isWaiting && !isStreaming && (
+                            <div className="ml-2">
+                              <svg
+                                className="w-5 h-5 text-gray-500"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                                />
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+                        <div
+                          className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg ${
+                            isSelected
+                              ? "bg-white bg-opacity-20"
+                              : "bg-[#0F0F23]"
+                          }`}
+                        >
+                          <span className="text-xl">{agent.icon}</span>
+                          <span className="font-medium">{agent.name}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+
+                  {/* Reasoning Items - 推理过程 */}
+                  {displayData.reasoningItems.length > 0 && (
+                    <div className="bg-[#1A1A2E] border border-gray-800 rounded-2xl p-6 animate-fadeInUp">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Brain className="w-5 h-5 text-blue-400" />
+                        <h3 className="text-lg font-semibold">推理过程</h3>
+                      </div>
+                      <div className="space-y-3">
+                        {displayData.reasoningItems.map((item, idx) => (
                           <div
-                            className="w-1.5 h-1.5 bg-purple-300 rounded-full animate-bounce"
+                            key={item.id}
+                            className="bg-[#0F0F23] rounded-lg p-4 animate-fadeIn"
+                            style={{
+                              animationDelay: `${idx * 100}ms`,
+                              animationFillMode: "both",
+                            }}
+                          >
+                            <p className="text-sm text-gray-300 leading-relaxed">
+                              {item.content}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-4">
+                  {/* 思考内容卡片 - 根据 agent 类型和 citations/annotation 状态显示 */}
+
+                  {/* Social Agent: 只显示两行思考过程 */}
+                  {selectedAgent.type === "social" && (
+                    <div className="bg-[#1A1A2E] border border-gray-800 rounded-2xl p-6">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="flex gap-1">
+                          <div
+                            className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"
                             style={{ animationDelay: "0ms" }}
                           ></div>
                           <div
-                            className="w-1.5 h-1.5 bg-purple-300 rounded-full animate-bounce"
+                            className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"
                             style={{ animationDelay: "150ms" }}
                           ></div>
                           <div
-                            className="w-1.5 h-1.5 bg-purple-300 rounded-full animate-bounce"
+                            className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"
                             style={{ animationDelay: "300ms" }}
                           ></div>
                         </div>
-                      )}
-                      {isCompleted && (
-                        <div className="ml-2">
-                          <svg
-                            className="w-5 h-5 text-green-400"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M5 13l4 4L19 7"
-                            />
-                          </svg>
+                        <div className="text-gray-300 font-medium">
+                          思考过程
                         </div>
-                      )}
-                      {isWaiting && !isStreaming && (
-                        <div className="ml-2">
-                          <svg
-                            className="w-5 h-5 text-gray-500"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                            />
-                          </svg>
-                        </div>
-                      )}
-                    </div>
-                    <div
-                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg ${
-                        isSelected ? "bg-white bg-opacity-20" : "bg-[#0F0F23]"
-                      }`}
-                    >
-                      <span className="text-xl">{agent.icon}</span>
-                      <span className="font-medium">{agent.name}</span>
-                    </div>
-                  </button>
-                );
-              })}
-
-             
-
-              {/* Reasoning Items - 推理过程 */}
-              {displayData.reasoningItems.length > 0 && (
-                <div className="bg-[#1A1A2E] border border-gray-800 rounded-2xl p-6 animate-fadeInUp">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Brain className="w-5 h-5 text-blue-400" />
-                    <h3 className="text-lg font-semibold">推理过程</h3>
-                  </div>
-                  <div className="space-y-3">
-                    {displayData.reasoningItems.map((item, idx) => (
-                      <div
-                        key={item.id}
-                        className="bg-[#0F0F23] rounded-lg p-4 animate-fadeIn"
+                      </div>
+                      {/* 固定两行高度，有滚动条，自动滚到底部 */}
+                      <div 
+                        ref={(el) => {
+                          if (el && displayData.thinkingContent) {
+                            el.scrollTop = el.scrollHeight;
+                          }
+                        }}
+                        className="text-sm text-gray-300 leading-relaxed overflow-y-auto whitespace-pre-wrap"
                         style={{
-                          animationDelay: `${idx * 100}ms`,
-                          animationFillMode: "both",
+                          maxHeight: '3rem', // 约两行高度 (1.5rem line-height * 2)
+                          scrollbarWidth: 'thin',
+                          scrollbarColor: 'rgba(59, 130, 246, 0.5) transparent'
                         }}
                       >
-                        <p className="text-sm text-gray-300 leading-relaxed">
-                          {item.content}
-                        </p>
+                        {displayData.thinkingContent}
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+                    </div>
+                  )}
 
-            <div className="space-y-4">
-              {/* 思考内容卡片 - 根据 agent 类型和 citations/annotation 状态显示 */}
-              
-              {/* Social Agent: 只在没有 citations 时显示完整思考过程，有 citations 则完全隐藏 */}
-              {selectedAgent.type === "social" && displayData.citations.length === 0 && displayData.thinkingContent && (
-                <div className="bg-[#1A1A2E] border border-gray-800 rounded-2xl p-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="flex gap-1">
-                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
-                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
-                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
-                    </div>
-                    <div className="text-gray-300 font-medium">思考过程</div>
-                  </div>
-                  {/* 显示完整的思考内容 */}
-                  <div className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">
-                    {displayData.thinkingContent}
-                  </div>
-                </div>
-              )}
-              
-              {/* News Agent: 只在没有 annotations 时显示完整思考过程，有 annotations 则完全隐藏 */}
-              {selectedAgent.type === "news" && selectedAgent.annotations.length === 0 && displayData.thinkingContent && (
-                <div className="bg-[#1A1A2E] border border-gray-800 rounded-2xl p-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="flex gap-1">
-                      <div className="w-2 h-2 bg-orange-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
-                      <div className="w-2 h-2 bg-orange-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
-                      <div className="w-2 h-2 bg-orange-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
-                    </div>
-                    <div className="text-gray-300 font-medium">思考过程</div>
-                  </div>
-                  {/* 显示完整的思考内容 */}
-                  <div className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">
-                    {displayData.thinkingContent}
-                  </div>
-                </div>
-              )}
-
-              {/* 市场数据可视化 (Tech/Whales Agent) */}
-              {(selectedAgent.type === "tech" || selectedAgent.type === "whales") && (
-                <div className="space-y-6">
-                  {/* 订单簿数据 */}
-                  {displayData.orderbooks && displayData.orderbooks.length > 0 && (
-                    <div className="space-y-4">
-                      {displayData.orderbooks.map((orderbook, idx) => (
-                        <OrderbookTable key={idx} orderbook={orderbook} index={idx} />
-                      ))}
-                    </div>
-                  )}
-                  
-                  {/* 价格历史数据 */}
-                  {displayData.priceHistory && displayData.priceHistory.length > 0 && (
-                    <div className="space-y-4">
-                      {displayData.priceHistory.map((history, idx) => (
-                        <PriceHistoryChart key={idx} priceHistory={history} index={idx} />
-                      ))}
-                    </div>
-                  )}
-                  
-                  {/* 持有者数据（Whales Agent） */}
-                  {displayData.topHolders && displayData.topHolders.length > 0 && (
-                    <div className="space-y-4">
-                      {displayData.topHolders.map((topHoldersData, idx) => (
-                        <TopHoldersTable key={idx} topHoldersData={topHoldersData} index={idx} />
-                      ))}
-                    </div>
-                  )}
-                  
-                  {/* 市场数据加载提示 */}
-                  {isStreaming && 
-                   displayData.orderbooks.length === 0 && 
-                   displayData.priceHistory.length === 0 && (
-                    <div className="bg-[#1A1A2E] border border-gray-800 rounded-xl p-8 text-center">
-                      <div className="flex flex-col items-center gap-3">
+                  {/* News Agent: 只显示两行思考过程 */}
+                  {selectedAgent.type === "news"  && (
+                    <div className="bg-[#1A1A2E] border border-gray-800 rounded-2xl p-6">
+                      <div className="flex items-center gap-3 mb-4">
                         <div className="flex gap-1">
-                          <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
-                          <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
-                          <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
+                          <div
+                            className="w-2 h-2 bg-orange-400 rounded-full animate-bounce"
+                            style={{ animationDelay: "0ms" }}
+                          ></div>
+                          <div
+                            className="w-2 h-2 bg-orange-400 rounded-full animate-bounce"
+                            style={{ animationDelay: "150ms" }}
+                          ></div>
+                          <div
+                            className="w-2 h-2 bg-orange-400 rounded-full animate-bounce"
+                            style={{ animationDelay: "300ms" }}
+                          ></div>
                         </div>
-                        <p className="text-sm text-gray-400">
-                          ⏳ 正在获取市场数据...
-                        </p>
+                        <div className="text-gray-300 font-medium">
+                          思考过程
+                        </div>
+                      </div>
+                      {/* 固定两行高度，有滚动条，自动滚到底部 */}
+                      <div 
+                        ref={(el) => {
+                          if (el && displayData.thinkingContent) {
+                            el.scrollTop = el.scrollHeight;
+                          }
+                        }}
+                        className="text-sm text-gray-300 leading-relaxed overflow-y-auto whitespace-pre-wrap"
+                        style={{
+                          maxHeight: '3rem', // 约两行高度 (1.5rem line-height * 2)
+                          scrollbarWidth: 'thin',
+                          scrollbarColor: 'rgba(251, 146, 60, 0.5) transparent'
+                        }}
+                      >
+                        {displayData.thinkingContent}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 市场数据可视化 (Tech/Whales Agent) */}
+                  {(selectedAgent.type === "tech" ||
+                    selectedAgent.type === "whales") && (
+                    <div className="space-y-6">
+                      {/* 订单簿数据 */}
+                      {displayData.orderbooks &&
+                        displayData.orderbooks.length > 0 && (
+                          <div className="space-y-4">
+                            {displayData.orderbooks.map((orderbook, idx) => (
+                              <OrderbookTable
+                                key={idx}
+                                orderbook={orderbook}
+                                index={idx}
+                              />
+                            ))}
+                          </div>
+                        )}
+
+                      {/* 价格历史数据 */}
+                      {displayData.priceHistory &&
+                        displayData.priceHistory.length > 0 && (
+                          <div className="space-y-4">
+                            {displayData.priceHistory.map((history, idx) => (
+                              <PriceHistoryChart
+                                key={idx}
+                                priceHistory={history}
+                                index={idx}
+                              />
+                            ))}
+                          </div>
+                        )}
+
+                      {/* 持有者数据（Whales Agent） */}
+                      {displayData.topHolders &&
+                        displayData.topHolders.length > 0 && (
+                          <div className="space-y-4">
+                            {displayData.topHolders.map(
+                              (topHoldersData, idx) => (
+                                <TopHoldersTable
+                                  key={idx}
+                                  topHoldersData={topHoldersData}
+                                  index={idx}
+                                />
+                              )
+                            )}
+                          </div>
+                        )}
+
+                      {/* 市场数据加载提示 */}
+                      {isStreaming &&
+                        displayData.orderbooks.length === 0 &&
+                        displayData.priceHistory.length === 0 && (
+                          <div className="bg-[#1A1A2E] border border-gray-800 rounded-xl p-8 text-center">
+                            <div className="flex flex-col items-center gap-3">
+                              <div className="flex gap-1">
+                                <div
+                                  className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
+                                  style={{ animationDelay: "0ms" }}
+                                ></div>
+                                <div
+                                  className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
+                                  style={{ animationDelay: "150ms" }}
+                                ></div>
+                                <div
+                                  className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
+                                  style={{ animationDelay: "300ms" }}
+                                ></div>
+                              </div>
+                              <p className="text-sm text-gray-400">
+                                ⏳ 正在获取市场数据...
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                    </div>
+                  )}
+
+                  {/* Twitter Citations - 只在 Social Agent 显示 */}
+                  {(() => {
+                    // 调试日志
+                    console.log("🔍 Twitter Citations 调试信息:", {
+                      selectedAgentType: selectedAgent.type,
+                      selectedAgentId: selectedAgentId,
+                      citationsExists: !!displayData.citations,
+                      citationsLength: displayData.citations?.length || 0,
+                      citations: displayData.citations,
+                      shouldShow:
+                        selectedAgent.type === "social" &&
+                        displayData.citations &&
+                        displayData.citations.length > 0,
+                    });
+
+                    return selectedAgent.type === "social" &&
+                      displayData.citations &&
+                      displayData.citations.length > 0 ? (
+                      <div className="bg-[#1A1A2E] border border-gray-800 rounded-2xl p-6 mb-6">
+                        <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                          <span className="text-2xl">🐦</span>
+                          <span>
+                            Twitter 引用 ({displayData.citations.length})
+                          </span>
+                        </h2>
+                        <div className="space-y-4">
+                          {displayData.citations.map((citation, idx) => (
+                            <TwitterCard key={citation.id_str} {...citation} />
+                          ))}
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
+
+                  {/* News Annotations - 只在 News Agent 显示所有最终分析结果 */}
+                  {selectedAgent.type === "news" &&
+                    displayData.annotations.length > 0 && (
+                      <div className="space-y-6">
+                        {displayData.annotations.map((annotation, idx) => (
+                          <div
+                            key={idx}
+                            className="bg-[#1A1A2E] border border-gray-800 rounded-2xl p-6 animate-fadeInUp"
+                          >
+                            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                              <span className="text-2xl">📰</span>
+                              <span>
+                                新闻分析结果{" "}
+                                {displayData.annotations.length > 1
+                                  ? `(${idx + 1}/${
+                                      displayData.annotations.length
+                                    })`
+                                  : ""}
+                              </span>
+                            </h2>
+                            <div className="prose prose-invert prose-sm max-w-none">
+                              <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                components={{
+                                  h1: ({ node, ...props }) => (
+                                    <h1
+                                      className="text-2xl font-bold text-white mt-6 mb-4"
+                                      {...props}
+                                    />
+                                  ),
+                                  h2: ({ node, ...props }) => (
+                                    <h2
+                                      className="text-xl font-bold text-white mt-5 mb-3"
+                                      {...props}
+                                    />
+                                  ),
+                                  h3: ({ node, ...props }) => (
+                                    <h3
+                                      className="text-lg font-semibold text-orange-300 mt-4 mb-2"
+                                      {...props}
+                                    />
+                                  ),
+                                  h4: ({ node, ...props }) => (
+                                    <h4
+                                      className="text-base font-semibold text-orange-400 mt-3 mb-2"
+                                      {...props}
+                                    />
+                                  ),
+                                  p: ({ node, ...props }) => (
+                                    <p
+                                      className="text-gray-300 mb-3 leading-relaxed"
+                                      {...props}
+                                    />
+                                  ),
+                                  ul: ({ node, ...props }) => (
+                                    <ul
+                                      className="list-disc list-inside mb-3 space-y-1 text-gray-300"
+                                      {...props}
+                                    />
+                                  ),
+                                  ol: ({ node, ...props }) => (
+                                    <ol
+                                      className="list-decimal list-inside mb-3 space-y-1 text-gray-300"
+                                      {...props}
+                                    />
+                                  ),
+                                  li: ({ node, ...props }) => (
+                                    <li
+                                      className="text-gray-300 ml-2"
+                                      {...props}
+                                    />
+                                  ),
+                                  a: ({ node, ...props }) => (
+                                    <a
+                                      className="text-orange-400 hover:text-orange-300 underline transition-colors"
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      {...props}
+                                    />
+                                  ),
+                                  blockquote: ({ node, ...props }) => (
+                                    <blockquote
+                                      className="border-l-4 border-orange-500 pl-4 py-2 mb-3 text-gray-400 italic bg-orange-900/10"
+                                      {...props}
+                                    />
+                                  ),
+                                  code: ({ node, inline, ...props }: any) =>
+                                    inline ? (
+                                      <code
+                                        className="bg-gray-800 text-orange-300 px-1.5 py-0.5 rounded text-sm"
+                                        {...props}
+                                      />
+                                    ) : (
+                                      <code
+                                        className="block bg-gray-900 text-green-300 p-3 rounded-lg mb-3 overflow-x-auto text-sm"
+                                        {...props}
+                                      />
+                                    ),
+                                  strong: ({ node, ...props }) => (
+                                    <strong
+                                      className="font-bold text-white"
+                                      {...props}
+                                    />
+                                  ),
+                                  em: ({ node, ...props }) => (
+                                    <em
+                                      className="italic text-gray-400"
+                                      {...props}
+                                    />
+                                  ),
+                                  hr: ({ node, ...props }) => (
+                                    <hr
+                                      className="border-gray-700 my-4"
+                                      {...props}
+                                    />
+                                  ),
+                                  table: ({ node, ...props }) => (
+                                    <div className="overflow-x-auto mb-4">
+                                      <table
+                                        className="min-w-full border border-gray-700"
+                                        {...props}
+                                      />
+                                    </div>
+                                  ),
+                                  th: ({ node, ...props }) => (
+                                    <th
+                                      className="border border-gray-700 px-3 py-2 bg-gray-800 text-white font-semibold text-left"
+                                      {...props}
+                                    />
+                                  ),
+                                  td: ({ node, ...props }) => (
+                                    <td
+                                      className="border border-gray-700 px-3 py-2 text-gray-300"
+                                      {...props}
+                                    />
+                                  ),
+                                }}
+                              >
+                                {annotation}
+                              </ReactMarkdown>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                  {/* Related Tweets - 只在 Social Agent 显示 */}
+
+                  {/* Logs - 日志信息 */}
+                  {displayData.logs.length > 0 && (
+                    <div className="bg-[#1A1A2E] border border-gray-800 rounded-2xl p-6 animate-fadeInUp">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Lightbulb className="w-5 h-5 text-yellow-400" />
+                        <h3 className="text-lg font-semibold">日志</h3>
+                      </div>
+                      <div className="space-y-2 max-h-64 overflow-y-auto scrollbar-hide">
+                        {displayData.logs.map((log, idx) => (
+                          <div
+                            key={log.id}
+                            className="text-xs font-mono text-gray-400 animate-fadeIn"
+                            style={{
+                              animationDelay: `${idx * 50}ms`,
+                              animationFillMode: "both",
+                            }}
+                          >
+                            <span
+                              className={`inline-block w-16 ${
+                                log.level === "error"
+                                  ? "text-red-400"
+                                  : log.level === "warn"
+                                  ? "text-yellow-400"
+                                  : "text-gray-500"
+                              }`}
+                            >
+                              [{log.level}]
+                            </span>
+                            <span className="ml-2">{log.message}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
                 </div>
-              )}
-
-              {/* Twitter Citations - 只在 Social Agent 显示 */}
-              {selectedAgent.type === "social" && displayData.citations && displayData.citations.length > 0 && (
-                <div className="bg-[#1A1A2E] border border-gray-800 rounded-2xl p-6 mb-6">
-                  <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                    <span className="text-2xl">🐦</span>
-                    <span>Twitter 引用</span>
-                  </h2>
-                  <div className="space-y-4">
-                    {displayData.citations.map((citation, idx) => (
-                      <TwitterCard key={citation.id_str} {...citation} />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* News Annotations - 只在 News Agent 显示所有最终分析结果 */}
-              {selectedAgent.type === "news" && displayData.annotations.length > 0 && (
-                <div className="space-y-6">
-                  {displayData.annotations.map((annotation, idx) => (
-                    <div key={idx} className="bg-[#1A1A2E] border border-gray-800 rounded-2xl p-6 animate-fadeInUp">
-                      <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                        <span className="text-2xl">📰</span>
-                        <span>新闻分析结果 {displayData.annotations.length > 1 ? `(${idx + 1}/${displayData.annotations.length})` : ''}</span>
-                      </h2>
-                      <div className="prose prose-invert prose-sm max-w-none">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                            h1: ({ node, ...props }) => (
-                              <h1 className="text-2xl font-bold text-white mt-6 mb-4" {...props} />
-                            ),
-                            h2: ({ node, ...props }) => (
-                              <h2 className="text-xl font-bold text-white mt-5 mb-3" {...props} />
-                            ),
-                            h3: ({ node, ...props }) => (
-                              <h3 className="text-lg font-semibold text-orange-300 mt-4 mb-2" {...props} />
-                            ),
-                            h4: ({ node, ...props }) => (
-                              <h4 className="text-base font-semibold text-orange-400 mt-3 mb-2" {...props} />
-                            ),
-                            p: ({ node, ...props }) => (
-                              <p className="text-gray-300 mb-3 leading-relaxed" {...props} />
-                            ),
-                            ul: ({ node, ...props }) => (
-                              <ul className="list-disc list-inside mb-3 space-y-1 text-gray-300" {...props} />
-                            ),
-                            ol: ({ node, ...props }) => (
-                              <ol className="list-decimal list-inside mb-3 space-y-1 text-gray-300" {...props} />
-                            ),
-                            li: ({ node, ...props }) => (
-                              <li className="text-gray-300 ml-2" {...props} />
-                            ),
-                            a: ({ node, ...props }) => (
-                              <a
-                                className="text-orange-400 hover:text-orange-300 underline transition-colors"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                {...props}
-                              />
-                            ),
-                            blockquote: ({ node, ...props }) => (
-                              <blockquote className="border-l-4 border-orange-500 pl-4 py-2 mb-3 text-gray-400 italic bg-orange-900/10" {...props} />
-                            ),
-                            code: ({ node, inline, ...props }: any) =>
-                              inline ? (
-                                <code className="bg-gray-800 text-orange-300 px-1.5 py-0.5 rounded text-sm" {...props} />
-                              ) : (
-                                <code className="block bg-gray-900 text-green-300 p-3 rounded-lg mb-3 overflow-x-auto text-sm" {...props} />
-                              ),
-                            strong: ({ node, ...props }) => (
-                              <strong className="font-bold text-white" {...props} />
-                            ),
-                            em: ({ node, ...props }) => (
-                              <em className="italic text-gray-400" {...props} />
-                            ),
-                            hr: ({ node, ...props }) => (
-                              <hr className="border-gray-700 my-4" {...props} />
-                            ),
-                            table: ({ node, ...props }) => (
-                              <div className="overflow-x-auto mb-4">
-                                <table className="min-w-full border border-gray-700" {...props} />
-                              </div>
-                            ),
-                            th: ({ node, ...props }) => (
-                              <th className="border border-gray-700 px-3 py-2 bg-gray-800 text-white font-semibold text-left" {...props} />
-                            ),
-                            td: ({ node, ...props }) => (
-                              <td className="border border-gray-700 px-3 py-2 text-gray-300" {...props} />
-                            ),
-                          }}
-                        >
-                          {annotation}
-                        </ReactMarkdown>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Related Tweets - 只在 Social Agent 显示 */}
-           
-
-              {/* Logs - 日志信息 */}
-              {displayData.logs.length > 0 && (
-                <div className="bg-[#1A1A2E] border border-gray-800 rounded-2xl p-6 animate-fadeInUp">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Lightbulb className="w-5 h-5 text-yellow-400" />
-                    <h3 className="text-lg font-semibold">日志</h3>
-                  </div>
-                  <div className="space-y-2 max-h-64 overflow-y-auto scrollbar-hide">
-                    {displayData.logs.map((log, idx) => (
-                      <div
-                        key={log.id}
-                        className="text-xs font-mono text-gray-400 animate-fadeIn"
-                        style={{
-                          animationDelay: `${idx * 50}ms`,
-                          animationFillMode: "both",
-                        }}
-                      >
-                        <span
-                          className={`inline-block w-16 ${
-                            log.level === "error"
-                              ? "text-red-400"
-                              : log.level === "warn"
-                              ? "text-yellow-400"
-                              : "text-gray-500"
-                          }`}
-                        >
-                          [{log.level}]
-                        </span>
-                        <span className="ml-2">{log.message}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-      
-
-        
-        
-          </>
+              </div>
+            </>
           )}
-
         </div>
       </div>
 

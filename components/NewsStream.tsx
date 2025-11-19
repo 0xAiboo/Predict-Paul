@@ -8,8 +8,10 @@ import EventCardSkeleton from "./EventCardSkeleton";
 import { useEvents } from "@/hooks/useEvents";
 import ErrorMessage from "./ErrorMessage";
 
+import type { Event } from "@/types";
+
 interface NewsStreamProps {
-  onNavigateToThinking?: (eventId?: string, eventTitle?: string, query?: string) => void;
+  onNavigateToThinking?: (eventId?: string, eventTitle?: string, query?: string, eventData?: Event) => void;
 }
 
 export default function NewsStream({ onNavigateToThinking }: NewsStreamProps) {
@@ -20,9 +22,9 @@ export default function NewsStream({ onNavigateToThinking }: NewsStreamProps) {
   // 使用事件 API Hook
   const { events, loading, error, refetch } = useEvents();
 
-  const handleAnalysisClick = (eventId: string, eventTitle: string) => {
+  const handleAnalysisClick = (eventId: string, eventTitle: string, eventData: Event) => {
     if (onNavigateToThinking) {
-      onNavigateToThinking(eventId, eventTitle);
+      onNavigateToThinking(eventId, eventTitle, undefined, eventData);
     }
   };
 
@@ -218,7 +220,7 @@ export default function NewsStream({ onNavigateToThinking }: NewsStreamProps) {
                 active={event.active}
                 closed={event.closed}
                 competitive={event.competitive}
-                onAnalysisClick={() => handleAnalysisClick(event.id, event.title)}
+                onAnalysisClick={() => handleAnalysisClick(event.id, event.title, event)}
                 onClick={() => {
                   // 可以在这里添加导航到详情页的逻辑
                   console.log('Clicked event:', event.id)

@@ -66,5 +66,25 @@
   .animate-fadeIn {
     animation: fadeIn 0.5s ease-in;
   }
+
+  /* 自定义滚动条样式 - 用于思考过程折叠区域 */
+  .overflow-y-auto::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .overflow-y-auto::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 3px;
+  }
+
+  .overflow-y-auto::-webkit-scrollbar-thumb {
+    background: rgba(168, 85, 247, 0.5);
+    border-radius: 3px;
+    transition: background 0.2s;
+  }
+
+  .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+    background: rgba(168, 85, 247, 0.7);
+  }
 }
 
