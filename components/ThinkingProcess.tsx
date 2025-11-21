@@ -22,6 +22,7 @@ import ErrorMessage from "./ErrorMessage";
 import OrderbookTable from "./OrderbookTable";
 import PriceHistoryChart from "./PriceHistoryChart";
 import TopHoldersTable from "./TopHoldersTable";
+import WhaleTradesList from "./WhaleTradesList";
 import TwitterCard from "./TwitterCard";
 import { analysisService, historyService, authService } from "@/lib/api-services";
 import type {
@@ -58,6 +59,7 @@ interface PriceHistoryData {
 }
 
 // 持有者数据结构（Whales Agent）
+// 🔄 旧的持有者数据结构（已废弃，保留用于兼容）
 interface HolderData {
   proxyWallet: string;
   name: string;
@@ -69,9 +71,26 @@ interface HolderData {
   outcomeIndex: number;
 }
 
+// 🆕 新的交易记录数据结构
+interface TradeData {
+  proxyWallet: string;      // 钱包地址
+  side: "BUY" | "SELL";     // 买卖方向
+  asset: string;            // 资产ID
+  size: number;             // 交易数量
+  price: number;            // 交易价格
+  timestamp: number;        // 时间戳（毫秒）
+  title: string;            // 市场标题
+  outcome: string;          // 结果描述（Yes/No）
+  outcomeIndex: number;     // 结果索引（0=Yes, 1=No）
+}
+
+// 🔄 更新为支持两种格式
 interface TopHoldersData {
-  token: string;
-  holders: HolderData[];
+  // 旧格式（可能还有些地方在用）
+  token?: string;
+  holders?: HolderData[];
+  // 新格式（交易记录数组）
+  trades?: TradeData[];
 }
 
 // Twitter 引用数据结构（Social Agent）
@@ -109,6 +128,8 @@ interface AgentData {
   citations: TwitterCitation[];
   // 新闻注释（主要用于 news agent）- 支持多个注释
   annotations: string[];
+  // 🆕 Agent 分析结论（来自 tool_output）
+  conclusion?: string;
 }
 
 export default function ThinkingProcess({
@@ -591,6 +612,49 @@ export default function ThinkingProcess({
         setError(safeToString(event.message) || "分析过程出错");
         break;
 
+      case "tool_output":
+        // 🎯 当收到 tool_output 时，显示结论并标记 agent 为完成
+        {
+          // 从 tool_name 映射到 agent type
+          const toolNameToAgentType = (toolName: string): string => {
+            if (toolName.includes("social")) return "social";
+            if (toolName.includes("news")) return "news";
+            if (toolName.includes("tech")) return "tech";
+            if (toolName.includes("whale")) return "whales";
+            return "";
+          };
+
+          const targetAgentType = toolNameToAgentType(event.tool_name || "");
+          
+          console.log("🎯 收到 tool_output:", {
+            tool_name: event.tool_name,
+            targetAgentType,
+            outputPreview: typeof event.output === "string" 
+              ? event.output.substring(0, 100) 
+              : event.output,
+          });
+
+          if (targetAgentType) {
+            // 更新对应 agent 的状态
+            setAgentsData((prev) =>
+              prev.map((agent) => {
+                if (agent.type === targetAgentType || agent.id === targetAgentType) {
+                  console.log(`✅ 标记 ${targetAgentType} agent 为完成，显示结论`);
+                  return {
+                    ...agent,
+                    status: "completed" as const,
+                    message: "分析完成",
+                    // 🆕 保存结论内容（thinkingContent 保持不变）
+                    conclusion: safeToString(event.output) || "",
+                  };
+                }
+                return agent;
+              })
+            );
+          }
+        }
+        break;
+
       case "done":
         setIsStreaming(false);
         setAnalysisEndTime(new Date());
@@ -714,16 +778,28 @@ export default function ThinkingProcess({
           }
         }
 
-        // 🐋 检查是否是持有者数据
+        // 🐋 检查是否是交易数据
         else if (event.tool_name === "fetch_top_trades") {
           try {
-            // 解析持有者数据（可能是数组格式）
             const message = event.message;
-            let holdersDataArray: TopHoldersData[] = [];
+            let tradesDataArray: TradeData[] = [];
 
+            // 🆕 新格式：直接是交易记录数组
             if (Array.isArray(message)) {
-              // 如果直接是数组
-              holdersDataArray = message;
+              // 检查数组第一个元素是否包含交易数据特征
+              if (message.length > 0 && message[0].side && message[0].price !== undefined) {
+                // 这是新格式的交易数据
+                tradesDataArray = message as TradeData[];
+                console.log("🐋 收到交易数据（新格式）:", {
+                  agentType,
+                  tradesCount: tradesDataArray.length,
+                  markets: [...new Set(tradesDataArray.map(t => t.title))].length,
+                  totalVolume: tradesDataArray.reduce((sum, t) => sum + t.size, 0).toFixed(2),
+                });
+              } else {
+                // 旧格式的持有者数据（兼容）
+                console.log("🐋 收到持有者数据（旧格式）");
+              }
             } else if (typeof message === "string") {
               // 如果是字符串，尝试解析
               const jsonStr = message
@@ -731,37 +807,54 @@ export default function ThinkingProcess({
                 .replace(/True/g, "true")
                 .replace(/False/g, "false");
               const parsed = JSON.parse(jsonStr);
-              holdersDataArray = Array.isArray(parsed) ? parsed : [parsed];
+              
+              if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].side) {
+                tradesDataArray = parsed as TradeData[];
+                console.log("🐋 收到交易数据（字符串解析）:", {
+                  tradesCount: tradesDataArray.length,
+                });
+              }
             }
 
-            console.log("🐋 收到持有者数据:", {
-              agentType,
-              tokensCount: holdersDataArray.length,
-              totalHolders: holdersDataArray.reduce(
-                (sum, token) => sum + (token.holders?.length || 0),
-                0
-              ),
-            });
-
-            setAgentsData((prev) =>
-              prev.map((agent) => {
-                if (agent.type === agentType || agent.id === agentType) {
-                  return {
-                    ...agent,
-                    topHolders: [...agent.topHolders, ...holdersDataArray],
-                  };
+            // 将交易数据转换为 TopHoldersData 格式存储
+            if (tradesDataArray.length > 0) {
+              // 按市场分组交易数据
+              const tradesByMarket = tradesDataArray.reduce((acc, trade) => {
+                if (!acc[trade.title]) {
+                  acc[trade.title] = [];
                 }
-                return agent;
-              })
-            );
+                acc[trade.title].push(trade);
+                return acc;
+              }, {} as Record<string, TradeData[]>);
 
-            // 🎯 当收到持有者数据时，标记 tech agent 为已完成
+              // 为每个市场创建一个 TopHoldersData 对象
+              const groupedData: TopHoldersData[] = Object.entries(tradesByMarket).map(
+                ([title, trades]) => ({
+                  token: title, // 使用标题作为标识
+                  trades: trades, // 存储交易记录
+                })
+              );
+
+              setAgentsData((prev) =>
+                prev.map((agent) => {
+                  if (agent.type === agentType || agent.id === agentType) {
+                    return {
+                      ...agent,
+                      topHolders: [...agent.topHolders, ...groupedData],
+                    };
+                  }
+                  return agent;
+                })
+              );
+            }
+
+            // 🎯 当收到交易数据时，标记 whales agent 为已完成
             console.log(
-              "✅ 收到 fetch_top_trades 数据，标记 tech agent 为已完成"
+              "✅ 收到 fetch_top_trades 数据，标记 whales agent 为已完成"
             );
             setAgentsData((prev) =>
               prev.map((agent) => {
-                if (agent.id === "tech" && agent.status !== "completed") {
+                if (agent.id === "whales" && agent.status !== "completed") {
                   return {
                     ...agent,
                     status: "completed" as const,
@@ -772,7 +865,7 @@ export default function ThinkingProcess({
               })
             );
           } catch (e) {
-            console.error("⚠️ 解析持有者数据失败:", e, event.message);
+            console.error("⚠️ 解析交易数据失败:", e, event.message);
           }
         }
 
@@ -1286,6 +1379,7 @@ export default function ThinkingProcess({
           topHolders: selectedAgent.topHolders,
           citations: selectedAgent.citations,
           annotations: selectedAgent.annotations,
+          conclusion: selectedAgent.conclusion, // 🆕 添加结论
         }
       : {
           tweets: selectedAgent.tweets,
@@ -1299,6 +1393,7 @@ export default function ThinkingProcess({
           topHolders: selectedAgent.topHolders,
           citations: selectedAgent.citations,
           annotations: selectedAgent.annotations,
+          conclusion: selectedAgent.conclusion, // 🆕 添加结论
         };
 
   if (loading && !question) {
@@ -2000,10 +2095,10 @@ export default function ThinkingProcess({
                   {/* Reasoning Items - 推理过程 */}
                   {displayData.reasoningItems.length > 0 && (
                     <div className="bg-[#1A1A2E] border border-gray-800 rounded-2xl p-6 animate-fadeInUp">
-                      <div className="flex items-center gap-2 mb-4">
+                      {/* <div className="flex items-center gap-2 mb-4">
                         <Brain className="w-5 h-5 text-blue-400" />
                         <h3 className="text-lg font-semibold">推理过程</h3>
-                      </div>
+                      </div> */}
                       <div className="space-y-3">
                         {displayData.reasoningItems.map((item, idx) => (
                           <div
@@ -2025,10 +2120,40 @@ export default function ThinkingProcess({
                 </div>
 
                 <div className="space-y-4">
+                  {/* 🆕 Agent 结论卡片 - 当 agent 完成且有结论时显示 */}
+                  {selectedAgent.status === "completed" && displayData.conclusion && (
+                    <div className="bg-[#1A1A2E] border border-green-800 rounded-2xl p-6 animate-fadeIn">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="flex items-center justify-center w-8 h-8 bg-green-500/20 rounded-lg">
+                          <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                        <div className="text-white font-semibold text-lg">分析结论</div>
+                      </div>
+                      <div className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+                            strong: ({ children }) => <strong className="text-white font-semibold">{children}</strong>,
+                            ul: ({ children }) => <ul className="list-disc list-inside mb-3 space-y-1">{children}</ul>,
+                            ol: ({ children }) => <ol className="list-decimal list-inside mb-3 space-y-1">{children}</ol>,
+                            li: ({ children }) => <li className="text-gray-300">{children}</li>,
+                            code: ({ children }) => <code className="bg-gray-800 px-1.5 py-0.5 rounded text-cyan-400 text-xs">{children}</code>,
+                          }}
+                        >
+                          {displayData.conclusion}
+                        </ReactMarkdown>
+                      </div>
+                    </div>
+                  )}
+
                   {/* 思考内容卡片 - 根据 agent 类型和 citations/annotation 状态显示 */}
+                  {/* 🆕 只在没有结论时显示思考过程 */}
 
                   {/* Social Agent: 只显示两行思考过程 */}
-                  {selectedAgent.type === "social" && (
+                  {!displayData.conclusion && selectedAgent.type === "social" && (
                     <div className="bg-[#1A1A2E] border border-gray-800 rounded-2xl p-6">
                       <div className="flex items-center gap-3 mb-4">
                         <div className="flex gap-1">
@@ -2069,7 +2194,7 @@ export default function ThinkingProcess({
                   )}
 
                   {/* News Agent: 只显示两行思考过程 */}
-                  {selectedAgent.type === "news"  && (
+                  {!displayData.conclusion && selectedAgent.type === "news"  && (
                     <div className="bg-[#1A1A2E] border border-gray-800 rounded-2xl p-6">
                       <div className="flex items-center gap-3 mb-4">
                         <div className="flex gap-1">
@@ -2146,13 +2271,28 @@ export default function ThinkingProcess({
                         displayData.topHolders.length > 0 && (
                           <div className="space-y-4">
                             {displayData.topHolders.map(
-                              (topHoldersData, idx) => (
-                                <TopHoldersTable
-                                  key={idx}
-                                  topHoldersData={topHoldersData}
-                                  index={idx}
-                                />
-                              )
+                              (topHoldersData, idx) => {
+                                // 🆕 如果有交易数据，使用新的交易列表展示
+                                const hasTrades = topHoldersData.trades && topHoldersData.trades.length > 0;
+                                
+                                if (hasTrades && selectedAgent.type === "whales") {
+                                  return (
+                                    <WhaleTradesList
+                                      key={idx}
+                                      tradesData={topHoldersData}
+                                    />
+                                  );
+                                }
+                                
+                                // 否则使用原来的表格展示
+                                return (
+                                  <TopHoldersTable
+                                    key={idx}
+                                    topHoldersData={topHoldersData}
+                                    index={idx}
+                                  />
+                                );
+                              }
                             )}
                           </div>
                         )}

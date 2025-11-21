@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 
+// 🔄 旧的持有者数据结构（已废弃，保留用于兼容）
 interface HolderData {
   proxyWallet: string;
   name: string;
@@ -15,9 +16,24 @@ interface HolderData {
   displayUsernamePublic?: boolean;
 }
 
+// 🆕 新的交易记录数据结构
+interface TradeData {
+  proxyWallet: string;      // 钱包地址
+  side: "BUY" | "SELL";     // 买卖方向
+  asset: string;            // 资产ID
+  size: number;             // 交易数量
+  price: number;            // 交易价格
+  timestamp: number;        // 时间戳（毫秒）
+  title: string;            // 市场标题
+  outcome: string;          // 结果描述（Yes/No）
+  outcomeIndex: number;     // 结果索引（0=Yes, 1=No）
+}
+
+// 🔄 更新为支持两种格式
 interface TopHoldersData {
-  token: string;
-  holders: HolderData[];
+  token?: string;           // 市场标识（可能是 token 地址或标题）
+  holders?: HolderData[];   // 旧格式：持有者列表
+  trades?: TradeData[];     // 新格式：交易记录列表
 }
 
 interface TopHoldersTableProps {
@@ -26,23 +42,85 @@ interface TopHoldersTableProps {
 }
 
 export default function TopHoldersTable({ topHoldersData, index = 0 }: TopHoldersTableProps) {
+  // 🔄 兼容新旧两种数据格式
   const holders = topHoldersData.holders?.slice(0, 20) || [];
+  const trades = topHoldersData.trades?.slice(0, 50) || []; // 显示更多交易记录
+  const isTradesMode = trades.length > 0; // 判断是否使用新的交易数据模式
   
-  // 计算持有者统计数据
+  // 🆕 如果没有任何数据，提前返回空状态
+  if (holders.length === 0 && trades.length === 0) {
+    return (
+      <div className="bg-[#1A1A2E] border border-gray-800 rounded-xl p-6 animate-fadeIn">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold flex items-center gap-2">
+            <span className="text-2xl">🐋</span>
+            <span className="text-white">Top Holders {index > 0 ? `#${index + 1}` : ""}</span>
+          </h3>
+          {topHoldersData.token && (
+            <div className="text-xs text-gray-400">
+              {topHoldersData.token.length > 20 
+                ? `${topHoldersData.token.slice(0, 8)}...${topHoldersData.token.slice(-8)}`
+                : topHoldersData.token
+              }
+            </div>
+          )}
+        </div>
+        <div className="text-center py-12 text-gray-500">
+          <div className="text-4xl mb-2">📊</div>
+          <p className="text-sm">暂无数据</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // 🔄 计算统计数据（根据数据类型）
   const stats = useMemo(() => {
-    const totalAmount = holders.reduce((sum, holder) => sum + holder.amount, 0);
-    const verifiedCount = holders.filter(h => h.verified).length;
-    const avgAmount = holders.length > 0 ? totalAmount / holders.length : 0;
-    const maxHolder = holders.length > 0 ? holders.reduce((max, h) => h.amount > max.amount ? h : max, holders[0]) : null;
-    
-    return {
-      totalAmount,
-      verifiedCount,
-      avgAmount,
-      maxHolder,
-      holderCount: holders.length
-    };
-  }, [holders]);
+    if (isTradesMode) {
+      // 🆕 新格式：交易数据统计
+      const totalVolume = trades.reduce((sum, trade) => sum + trade.size, 0);
+      const buyVolume = trades.filter(t => t.side === "BUY").reduce((sum, t) => sum + t.size, 0);
+      const sellVolume = trades.filter(t => t.side === "SELL").reduce((sum, t) => sum + t.size, 0);
+      const avgPrice = trades.length > 0 ? trades.reduce((sum, t) => sum + t.price, 0) / trades.length : 0;
+      const uniqueTraders = new Set(trades.map(t => t.proxyWallet)).size;
+      const maxTrade = trades.length > 0 ? trades.reduce((max, t) => t.size > max.size ? t : max, trades[0]) : null;
+      
+      return {
+        totalAmount: totalVolume,
+        totalVolume,
+        buyVolume,
+        sellVolume,
+        avgAmount: avgPrice,
+        avgPrice,
+        uniqueTraders,
+        maxHolder: maxTrade, // 兼容旧字段名
+        maxTrade,
+        holderCount: uniqueTraders,
+        tradeCount: trades.length,
+        verifiedCount: 0, // 交易数据没有认证信息
+      };
+    } else {
+      // 🔄 旧格式：持有者数据统计
+      const totalAmount = holders.reduce((sum, holder) => sum + holder.amount, 0);
+      const verifiedCount = holders.filter(h => h.verified).length;
+      const avgAmount = holders.length > 0 ? totalAmount / holders.length : 0;
+      const maxHolder = holders.length > 0 ? holders.reduce((max, h) => h.amount > max.amount ? h : max, holders[0]) : null;
+      
+      return {
+        totalAmount,
+        verifiedCount,
+        avgAmount,
+        maxHolder,
+        holderCount: holders.length,
+        tradeCount: 0,
+        uniqueTraders: 0,
+        buyVolume: 0,
+        sellVolume: 0,
+        avgPrice: 0,
+        totalVolume: 0,
+        maxTrade: null,
+      };
+    }
+  }, [holders, trades, isTradesMode]);
 
   // 格式化钱包地址
   const formatAddress = (address: string) => {
@@ -51,7 +129,8 @@ export default function TopHoldersTable({ topHoldersData, index = 0 }: TopHolder
   };
 
   // 格式化数量
-  const formatAmount = (amount: number) => {
+  const formatAmount = (amount?: number | null) => {
+    if (!amount || amount === 0) return "0.00"; // 🆕 处理空值
     if (amount >= 1000000) {
       return `${(amount / 1000000).toFixed(2)}M`;
     } else if (amount >= 1000) {
@@ -61,8 +140,9 @@ export default function TopHoldersTable({ topHoldersData, index = 0 }: TopHolder
   };
 
   // 获取持有占比
-  const getPercentage = (amount: number) => {
-    return stats.totalAmount > 0 ? ((amount / stats.totalAmount) * 100).toFixed(2) : "0.00";
+  const getPercentage = (amount?: number | null) => {
+    if (!amount || !stats.totalAmount) return "0.00"; // 🆕 处理空值
+    return ((amount / stats.totalAmount) * 100).toFixed(2);
   };
 
   return (
@@ -72,9 +152,16 @@ export default function TopHoldersTable({ topHoldersData, index = 0 }: TopHolder
           <span className="text-2xl">🐋</span>
           <span className="text-white">Top Holders {index > 0 ? `#${index + 1}` : ""}</span>
         </h3>
-        <div className="text-xs text-gray-400">
-          Token: {topHoldersData.token.slice(0, 8)}...{topHoldersData.token.slice(-8)}
-        </div>
+        {topHoldersData.token && (
+          <div className="text-xs text-gray-400 max-w-md truncate">
+            {topHoldersData.token.length > 50 
+              ? topHoldersData.token.slice(0, 45) + "..."
+              : topHoldersData.token.startsWith("0x") && topHoldersData.token.length > 20
+              ? `Token: ${topHoldersData.token.slice(0, 8)}...${topHoldersData.token.slice(-8)}`
+              : topHoldersData.token
+            }
+          </div>
+        )}
       </div>
 
       {/* 统计信息 */}
@@ -100,9 +187,12 @@ export default function TopHoldersTable({ topHoldersData, index = 0 }: TopHolder
         </div>
         
         <div className="bg-[#0D0D1A] rounded-lg p-3 border border-gray-800">
-          <div className="text-xs text-gray-400 mb-1">最大持仓</div>
+          <div className="text-xs text-gray-400 mb-1">{isTradesMode ? "最大交易" : "最大持仓"}</div>
           <div className="text-lg font-bold text-yellow-400">
-            {stats.maxHolder ? formatAmount(stats.maxHolder.amount) : "N/A"}
+            {isTradesMode 
+              ? (stats.maxTrade ? formatAmount(stats.maxTrade.size) : "N/A")
+              : (stats.maxHolder ? formatAmount((stats.maxHolder as any).amount) : "N/A")
+            }
           </div>
         </div>
       </div>
@@ -220,9 +310,9 @@ export default function TopHoldersTable({ topHoldersData, index = 0 }: TopHolder
         </table>
       </div>
 
-      {holders.length === 0 && (
+      {holders.length === 0 && trades.length === 0 && (
         <div className="text-center py-8 text-gray-500">
-          暂无持有者数据
+          {isTradesMode ? "暂无交易数据" : "暂无持有者数据"}
         </div>
       )}
     </div>
