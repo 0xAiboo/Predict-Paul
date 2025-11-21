@@ -77,11 +77,7 @@ export default function WhaleTradesList({ tradesData }: WhaleTradesListProps) {
       </div>
 
       {/* 简介文字 */}
-      <p className="text-sm text-gray-400 mb-6 leading-relaxed">
-        The following is a summary of several major Web3 events in November and October 2025, covering
-        multiple dimensions such as technological concepts, market risks, industry data, and industry activities.
-        All sources are clearly marked for easy reference.
-      </p>
+    
 
       {/* 交易列表 */}
       <div className="space-y-2">
