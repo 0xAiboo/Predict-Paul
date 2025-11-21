@@ -2093,12 +2093,12 @@ export default function ThinkingProcess({
                   })}
 
                   {/* Reasoning Items - 推理过程 */}
-                  {displayData.reasoningItems.length > 0 && (
+                  {/* {displayData.reasoningItems.length > 0 && (
                     <div className="bg-[#1A1A2E] border border-gray-800 rounded-2xl p-6 animate-fadeInUp">
-                      {/* <div className="flex items-center gap-2 mb-4">
+                      <div className="flex items-center gap-2 mb-4">
                         <Brain className="w-5 h-5 text-blue-400" />
                         <h3 className="text-lg font-semibold">推理过程</h3>
-                      </div> */}
+                      </div>
                       <div className="space-y-3">
                         {displayData.reasoningItems.map((item, idx) => (
                           <div
@@ -2116,7 +2116,7 @@ export default function ThinkingProcess({
                         ))}
                       </div>
                     </div>
-                  )}
+                  )} */}
                 </div>
 
                 <div className="space-y-4">
