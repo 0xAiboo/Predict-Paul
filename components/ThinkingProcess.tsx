@@ -23,7 +23,7 @@ import OrderbookTable from "./OrderbookTable";
 import PriceHistoryChart from "./PriceHistoryChart";
 import TopHoldersTable from "./TopHoldersTable";
 import TwitterCard from "./TwitterCard";
-import { analysisService } from "@/lib/api-services";
+import { analysisService, historyService, authService } from "@/lib/api-services";
 import type {
   SSEEvent,
   Agent,
@@ -32,6 +32,7 @@ import type {
   ReasoningItem,
   LogItem,
   Event,
+  SessionMessage,
 } from "@/types";
 
 interface ThinkingProcessProps {
@@ -40,6 +41,7 @@ interface ThinkingProcessProps {
   eventData?: Event; // 新增：完整的事件数据
   initialQuery?: string;
   sessionId?: string;
+  onLoginSuccess?: () => void;
 }
 
 // 市场数据结构
@@ -115,6 +117,7 @@ export default function ThinkingProcess({
   eventData,
   initialQuery = "",
   sessionId,
+  onLoginSuccess,
 }: ThinkingProcessProps) {
   const [activeTab, setActiveTab] = useState<"result" | "thinking">("thinking");
   const [query, setQuery] = useState(initialQuery);
@@ -128,6 +131,10 @@ export default function ThinkingProcess({
   const [error, setError] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
+  
+  // 会话详情相关状态
+  const [sessionMessages, setSessionMessages] = useState<SessionMessage[]>([]);
+  const [isHistoryView, setIsHistoryView] = useState(false);
 
   const [selectedAgentId, setSelectedAgentId] = useState<string>("social");
 
@@ -258,7 +265,7 @@ export default function ThinkingProcess({
 
       // 🐋 持有者数据工具映射到 whales agent
       if (
-        toolName.includes("fetch_top_holders") ||
+        toolName.includes("fetch_top_trades") ||
         toolName.includes("holders") ||
         toolName.includes("whale")
       ) {
@@ -708,7 +715,7 @@ export default function ThinkingProcess({
         }
 
         // 🐋 检查是否是持有者数据
-        else if (event.tool_name === "fetch_top_holders") {
+        else if (event.tool_name === "fetch_top_trades") {
           try {
             // 解析持有者数据（可能是数组格式）
             const message = event.message;
@@ -750,7 +757,7 @@ export default function ThinkingProcess({
 
             // 🎯 当收到持有者数据时，标记 tech agent 为已完成
             console.log(
-              "✅ 收到 fetch_top_holders 数据，标记 tech agent 为已完成"
+              "✅ 收到 fetch_top_trades 数据，标记 tech agent 为已完成"
             );
             setAgentsData((prev) =>
               prev.map((agent) => {
@@ -1041,7 +1048,6 @@ export default function ThinkingProcess({
       case "news_tool_output":
       case "tech_tool_output":
       case "whales_tool_output":
-        // 更新对应的 tool call，添加输出信息
         setAgentsData((prev) =>
           prev.map((agent) => {
             if (agent.type === agentType || agent.id === agentType) {
@@ -1130,7 +1136,8 @@ export default function ThinkingProcess({
 
   const startAnalysis = (queryText?: string) => {
     const actualQuery = queryText || query;
-    if (!actualQuery && !eventId) {
+    // 如果有 sessionId，不需要 query 或 eventId
+    if (!actualQuery && !eventId && !sessionId) {
       setError("请输入查询内容或选择事件");
       return;
     }
@@ -1196,8 +1203,56 @@ export default function ThinkingProcess({
     );
   };
 
+  // 加载会话详情
+  const loadSessionDetail = async (sessionIdToLoad: string) => {
+    try {
+      setLoading(true);
+      setError(null);
+      setIsHistoryView(true);
+      
+      const { userId } = authService.getUserInfo();
+      if (!userId) {
+        setError("请先登录");
+        return;
+      }
+
+      console.log("🔄 加载会话详情:", sessionIdToLoad);
+      const response = await historyService.getSessionDetail(userId, sessionIdToLoad);
+
+      if (response.status === "ok" && response.code === 0) {
+        setSessionMessages(response.data);
+        
+        // 设置第一个用户消息作为问题标题
+        const firstUserMessage = response.data.find(msg => msg.role === 'user');
+        if (firstUserMessage) {
+          setQuestion(firstUserMessage.content);
+          setQuery(firstUserMessage.content);
+        }
+        
+        console.log("✅ 会话详情加载完成:", {
+          totalMessages: response.data.length,
+          userMessages: response.data.filter(m => m.role === 'user').length,
+          assistantMessages: response.data.filter(m => m.role === 'assistant').length,
+        });
+      } else {
+        setError("加载会话失败");
+      }
+    } catch (err: any) {
+      console.error("❌ 加载会话详情失败:", err);
+      setError(err.message || "加载会话失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    if (eventId || initialQuery) {
+    // 如果有 sessionId 且没有 eventId/initialQuery，则加载历史会话
+    if (sessionId && !eventId && !initialQuery) {
+      loadSessionDetail(sessionId);
+    }
+    // 否则，如果有 eventId 或 initialQuery，开始新分析
+    else if (eventId || initialQuery) {
+      setIsHistoryView(false);
       startAnalysis(initialQuery);
     }
 
@@ -1253,7 +1308,7 @@ export default function ThinkingProcess({
   return (
     <div className="min-h-screen bg-[#0F0F23]">
       {/* Header */}
-      <Header title="Thinking Process" showSearch={true} />
+      <Header title="Thinking Process" showSearch={true} onLoginSuccess={onLoginSuccess} />
 
       {/* Content */}
       <div className="px-8 py-6 pb-40">
@@ -1606,58 +1661,102 @@ export default function ThinkingProcess({
             </div>
           )}
 
-          {/* Tabs */}
-          <div className="flex gap-4 mb-6">
-            <button
-              onClick={() => setActiveTab("result")}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-colors ${
-                activeTab === "result"
-                  ? "bg-[#1A1A2E] border border-gray-700"
-                  : "text-gray-400 hover:text-white"
-              }`}
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+          {/* Tabs - 历史视图不显示思考过程tab */}
+          {!isHistoryView && (
+            <div className="flex gap-4 mb-6">
+              <button
+                onClick={() => setActiveTab("result")}
+                className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-colors ${
+                  activeTab === "result"
+                    ? "bg-[#1A1A2E] border border-gray-700"
+                    : "text-gray-400 hover:text-white"
+                }`}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                />
-              </svg>
-              研究结果
-            </button>
-            <button
-              onClick={() => setActiveTab("thinking")}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-colors ${
-                activeTab === "thinking"
-                  ? "bg-[#1A1A2E] border border-gray-700"
-                  : "text-gray-400 hover:text-white"
-              }`}
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                  />
+                </svg>
+                研究结果
+              </button>
+              <button
+                onClick={() => setActiveTab("thinking")}
+                className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-colors ${
+                  activeTab === "thinking"
+                    ? "bg-[#1A1A2E] border border-gray-700"
+                    : "text-gray-400 hover:text-white"
+                }`}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-                />
-              </svg>
-              思考过程
-            </button>
-          </div>
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                  />
+                </svg>
+                思考过程
+              </button>
+            </div>
+          )}
+
+          {/* 历史视图 - 显示所有会话消息 */}
+          {isHistoryView && sessionMessages.length > 0 && (
+            <div className="space-y-6">
+              {sessionMessages
+                .filter(message => message.content && message.content.trim() !== '' && message.role !== 'user')
+                .map((message, index) => (
+                  <div
+                    key={index}
+                    className={`rounded-2xl p-6 animate-fadeInUp ${
+                      message.role === 'user'
+                        ? 'bg-blue-600/20 border border-blue-500/30'
+                        : 'bg-gradient-primary'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-4">
+                      {message.role === 'user' ? (
+                        <>
+                          {/* <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-sm font-bold">
+                            Q
+                          </div>
+                          <h3 className="text-lg font-bold">问题</h3> */}
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="w-6 h-6" />
+                          <h3 className="text-lg font-bold">分析结果</h3>
+                        </>
+                      )}
+                      <span className="ml-auto text-xs text-gray-400">
+                        {new Date(message.create_time).toLocaleString('zh-CN')}
+                      </span>
+                    </div>
+                    <div className="prose prose-invert max-w-none">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {message.content}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
 
           {/* 研究结果标签页 - 只显示最终分析结果 */}
-          {activeTab === "result" && (
+          {!isHistoryView && activeTab === "result" && (
             <>
               {displayData.finalText ? (
                 <div className="bg-gradient-primary rounded-2xl p-8 animate-fadeInUp">
@@ -1802,7 +1901,7 @@ export default function ThinkingProcess({
           )}
 
           {/* 思考过程标签页 - 显示完整的 Agent 调用过程 */}
-          {activeTab === "thinking" && (
+          {!isHistoryView && activeTab === "thinking" && (
             <>
               <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6">
                 {/* Left Column - Agent Cards */}

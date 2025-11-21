@@ -12,9 +12,10 @@ import type { Event } from "@/types";
 
 interface NewsStreamProps {
   onNavigateToThinking?: (eventId?: string, eventTitle?: string, query?: string, eventData?: Event) => void;
+  onLoginSuccess?: () => void;
 }
 
-export default function NewsStream({ onNavigateToThinking }: NewsStreamProps) {
+export default function NewsStream({ onNavigateToThinking, onLoginSuccess }: NewsStreamProps) {
   const [filter, setFilter] = useState<"all" | "featured" | "new" | "hot">("all");
   const [sort, setSort] = useState<"volume" | "liquidity" | "ending">("volume");
   const [inputQuery, setInputQuery] = useState("");
@@ -57,7 +58,7 @@ export default function NewsStream({ onNavigateToThinking }: NewsStreamProps) {
   return (
     <div className="min-h-screen bg-[#0F0F23] pb-32">
       {/* Header */}
-      <Header title="News Stream" showSearch={true} />
+      <Header title="News Stream" showSearch={true} onLoginSuccess={onLoginSuccess} />
 
       {/* Main Content */}
       <div className="px-8 py-6">

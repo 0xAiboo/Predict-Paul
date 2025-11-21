@@ -12,7 +12,19 @@ import type {
   AnalyzeRequest,
   SSEEvent,
   HistoryItem,
+  WalletLoginRequest,
+  WalletLoginResponse,
+  UserHistoryResponse,
+  SessionDetailResponse,
 } from "@/types";
+
+// 辅助函数：获取认证 headers
+const getAuthHeaders = (): Record<string, string> => {
+  if (typeof window === 'undefined') return {};
+  const token = localStorage.getItem('access_token');
+  if (!token) return {};
+  return { 'x-token': token };
+};
 
 // 事件服务
 export const eventService = {
@@ -58,19 +70,29 @@ export const marketService = {
 export const analysisService = {
   // 获取新闻分析
   getNewsAnalysis: async (marketId: string) => {
-    return get<ApiResponse<Analysis>>(API_ENDPOINTS.newsAnalysis, { marketId });
+    return get<ApiResponse<Analysis>>(
+      API_ENDPOINTS.newsAnalysis, 
+      { marketId },
+      { headers: getAuthHeaders() }
+    );
   },
 
   // 创建新分析
   createAnalysis: async (question: string) => {
-    return post<ApiResponse<Analysis>>(API_ENDPOINTS.analysis, { question });
+    return post<ApiResponse<Analysis>>(
+      API_ENDPOINTS.analysis, 
+      { question },
+      { headers: getAuthHeaders() }
+    );
   },
 
   // 获取思考过程
   getThinkingProcess: async (analysisId: string) => {
-    return get<ApiResponse<ThinkingProcess>>(API_ENDPOINTS.thinkingProcess, {
-      analysisId,
-    });
+    return get<ApiResponse<ThinkingProcess>>(
+      API_ENDPOINTS.thinkingProcess,
+      { analysisId },
+      { headers: getAuthHeaders() }
+    );
   },
 
   // 创建分析请求（SSE 流）- 使用 POST 方法，参数通过 body 传递
@@ -101,6 +123,7 @@ export const analysisService = {
       headers: {
         "Content-Type": "application/json",
         Accept: "text/event-stream",
+        ...getAuthHeaders(),
       },
       body: JSON.stringify(body),
       signal,
@@ -175,12 +198,20 @@ export const analysisService = {
 export const predictionService = {
   // 创建预测
   createPrediction: async (data: PredictionRequest) => {
-    return post<ApiResponse<any>>(API_ENDPOINTS.createPrediction, data);
+    return post<ApiResponse<any>>(
+      API_ENDPOINTS.createPrediction, 
+      data,
+      { headers: getAuthHeaders() }
+    );
   },
 
   // 获取用户预测历史
   getUserPredictions: async (userId?: string) => {
-    return get<ApiResponse<any[]>>(API_ENDPOINTS.predictions, { userId });
+    return get<ApiResponse<any[]>>(
+      API_ENDPOINTS.predictions, 
+      { userId },
+      { headers: getAuthHeaders() }
+    );
   },
 };
 
@@ -188,12 +219,79 @@ export const predictionService = {
 export const agentService = {
   // 获取所有 Agent 状态
   getAgents: async (analysisId: string) => {
-    return get<ApiResponse<any>>(API_ENDPOINTS.agents, { analysisId });
+    return get<ApiResponse<any>>(
+      API_ENDPOINTS.agents, 
+      { analysisId },
+      { headers: getAuthHeaders() }
+    );
   },
 
   // 获取社交 Agent 数据
   getSocialAgent: async (analysisId: string) => {
-    return get<ApiResponse<any>>(API_ENDPOINTS.socialAgent, { analysisId });
+    return get<ApiResponse<any>>(
+      API_ENDPOINTS.socialAgent, 
+      { analysisId },
+      { headers: getAuthHeaders() }
+    );
+  },
+};
+
+// 认证服务
+export const authService = {
+  // 钱包登录
+  login: async (loginData: WalletLoginRequest) => {
+    return post<WalletLoginResponse>(API_ENDPOINTS.login, loginData);
+  },
+  
+  // 保存 token 到 localStorage
+  saveToken: (token: string) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('access_token', token);
+    }
+  },
+  
+  // 获取 token
+  getToken: (): string | null => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('access_token');
+    }
+    return null;
+  },
+  
+  // 清除 token
+  clearToken: () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('user_id');
+      localStorage.removeItem('wallet_address');
+      localStorage.removeItem('wallet_chain'); // 🆕 也清除 wallet_chain
+    }
+  },
+  
+  // 保存用户信息
+  saveUserInfo: (userId: string, address: string, chain: string) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('user_id', userId);
+      localStorage.setItem('wallet_address', address);
+      localStorage.setItem('wallet_chain', chain);
+    }
+  },
+  
+  // 获取用户信息
+  getUserInfo: () => {
+    if (typeof window !== 'undefined') {
+      return {
+        userId: localStorage.getItem('user_id'),
+        address: localStorage.getItem('wallet_address'),
+        chain: localStorage.getItem('wallet_chain'),
+      };
+    }
+    return { userId: null, address: null, chain: null };
+  },
+  
+  // 检查是否已登录
+  isAuthenticated: (): boolean => {
+    return !!authService.getToken();
   },
 };
 
@@ -202,13 +300,34 @@ export const historyService = {
   // 获取历史记录列表
   getHistory: async () => {
     return get<{ status: string; data: HistoryItem[]; code: number }>(
-      API_ENDPOINTS.history
+      API_ENDPOINTS.history,
+      undefined,
+      { headers: getAuthHeaders() }
+    );
+  },
+  
+  // 获取用户会话历史
+  getUserHistory: async (userId: string) => {
+    return get<UserHistoryResponse>(
+      API_ENDPOINTS.userHistory(userId),
+      undefined,
+      { headers: getAuthHeaders() }
+    );
+  },
+  
+  // 获取会话详情
+  getSessionDetail: async (userId: string, sessionId: string) => {
+    return get<SessionDetailResponse>(
+      API_ENDPOINTS.session(userId, sessionId),
+      undefined,
+      { headers: getAuthHeaders() }
     );
   },
 };
 
 // 导出所有服务
 export const apiService = {
+  auth: authService,
   event: eventService,
   market: marketService,
   analysis: analysisService,

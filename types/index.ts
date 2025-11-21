@@ -231,3 +231,52 @@ export interface HistoryItem {
   updated_at: string
 }
 
+// 钱包登录类型
+export interface WalletLoginRequest {
+  address: string
+  signature: string
+  message: string
+  chain: 'ethereum' | 'solana'
+}
+
+export interface WalletLoginResponse {
+  code: number
+  data: {
+    id: string
+    address: string
+    chain: string
+    access_token: string
+    created_at: string
+    updated_at: string
+  }
+  message: string
+}
+
+// 用户会话历史
+export interface UserSession {
+  session_id: string
+  title: string
+  create_time: number
+  update_time: number
+}
+
+export interface UserHistoryResponse {
+  status: string
+  code: number
+  data: UserSession[]
+}
+
+// 会话消息
+export interface SessionMessage {
+  seq: number
+  role: 'user' | 'assistant'
+  content: string
+  create_time: number
+}
+
+export interface SessionDetailResponse {
+  status: string
+  code: number
+  data: SessionMessage[]
+}
+

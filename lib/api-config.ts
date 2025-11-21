@@ -12,6 +12,9 @@ export const API_BASE_URL = ''
  * 所有路径都使用 /api 前缀，会通过反向代理转发到后端
  */
 export const API_ENDPOINTS = {
+  // 认证相关
+  login: '/api/login',
+  
   // 事件相关
   events: '/api/event',
   eventDetail: (id: string) => `/api/event/${id}`,
@@ -29,6 +32,10 @@ export const API_ENDPOINTS = {
   
   // 历史记录
   history: '/api/history',
+  userHistory: (userId: string) => `/api/history?user_id=${userId}`,
+  
+  // 会话详情
+  session: (userId: string, sessionId: string) => `/api/session?user_id=${userId}&session_id=${sessionId}`,
   
   // Agent 相关
   agents: '/api/agents',

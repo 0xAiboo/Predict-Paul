@@ -1,21 +1,52 @@
 'use client'
 
-import { Menu, Settings } from 'lucide-react'
+import { Menu } from 'lucide-react'
 import Image from 'next/image'
-import HistoryList from './HistoryList'
+import { useUserHistory } from '@/hooks/useUserHistory'
+import { authService } from '@/lib/api-services'
 import type { HistoryItem } from '@/types'
 
 interface SidebarProps {
   currentPage: string
-  setCurrentPage: (page: 'news-stream' | 'news-analysis' | 'thinking-process') => void
+  setCurrentPage: (page: 'news-stream' | 'thinking-process') => void
   onHistoryItemClick?: (item: HistoryItem) => void
+  onUserSessionClick?: (sessionId: string, title: string) => void
 }
 
-export default function Sidebar({ currentPage, setCurrentPage, onHistoryItemClick }: SidebarProps) {
+export default function Sidebar({ currentPage, setCurrentPage, onHistoryItemClick, onUserSessionClick }: SidebarProps) {
+  const { sessions, loading } = useUserHistory()
+  const { userId } = authService.getUserInfo()
+
   const handleHistoryItemClick = (item: HistoryItem) => {
     if (onHistoryItemClick) {
       onHistoryItemClick(item)
     }
+  }
+
+  const handleSessionClick = (sessionId: string, title: string) => {
+    if (onUserSessionClick) {
+      onUserSessionClick(sessionId, title)
+    }
+  }
+
+  // 格式化时间
+  const formatTime = (timestamp: number) => {
+    const date = new Date(timestamp)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+
+    if (diffMins < 1) return '刚刚'
+    if (diffMins < 60) return `${diffMins}分钟前`
+    if (diffHours < 24) return `${diffHours}小时前`
+    if (diffDays < 7) return `${diffDays}天前`
+
+    return date.toLocaleDateString('zh-CN', {
+      month: 'short',
+      day: 'numeric',
+    })
   }
 
   return (
@@ -31,7 +62,6 @@ export default function Sidebar({ currentPage, setCurrentPage, onHistoryItemClic
             priority
           />
         </div>
-       
       </div>
 
       {/* Menu Toggle */}
@@ -47,37 +77,46 @@ export default function Sidebar({ currentPage, setCurrentPage, onHistoryItemClic
         +Start New Chat
       </button>
 
-      {/* History Analysis */}
-      <div className="px-4 mb-4">
-        <button
-          onClick={() => setCurrentPage('news-analysis')}
-          className="text-sm text-gray-400 hover:text-white transition-colors mb-3"
-        >
-          History Analysis
-        </button>
-      </div>
-
-      {/* History List */}
-      <HistoryList 
-        currentPage={currentPage}
-        onHistoryItemClick={handleHistoryItemClick}
-      />
-
-      {/* User Profile */}
-      <div className="p-4 border-t border-gray-800">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center text-sm font-semibold">
-            SW
+      {/* 用户会话历史 */}
+      <div className="flex-1 overflow-y-auto px-4">
+        {!userId ? (
+          <div className="text-center py-8 px-4">
+            <div className="text-4xl mb-2">🔒</div>
+            <p className="text-xs text-gray-500">连接钱包查看历史</p>
           </div>
-          <div className="flex-1">
-            <div className="text-sm font-medium">Sophia Williams</div>
-            <div className="text-xs text-gray-400">sophia@aisocul.com</div>
+        ) : loading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="h-16 bg-gray-800/50 rounded-lg animate-pulse"
+              />
+            ))}
           </div>
-        </div>
-        <button className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-800 rounded-lg transition-colors text-sm">
-          <Settings className="w-4 h-4" />
-          <span>Setting</span>
-        </button>
+        ) : sessions.length === 0 ? (
+          <div className="text-center py-8 px-4">
+            <div className="text-4xl mb-2">📝</div>
+            <p className="text-xs text-gray-500">暂无历史记录</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {sessions.map((session) => (
+              <button
+                key={session.session_id}
+                onClick={() => handleSessionClick(session.session_id, session.title)}
+                className="w-full text-left p-3 rounded-lg hover:bg-gray-800 transition-colors group"
+              >
+                <div className="text-sm font-medium text-gray-200 group-hover:text-white 
+                              line-clamp-2 mb-1">
+                  {session.title}
+                </div>
+                <div className="text-xs text-gray-500">
+                  {formatTime(session.create_time)}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </aside>
   )

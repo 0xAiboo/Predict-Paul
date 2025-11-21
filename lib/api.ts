@@ -56,6 +56,23 @@ async function request<T>(
     // 处理非 2xx 响应
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
+      
+      // 处理 401 未授权错误
+      if (response.status === 401) {
+        console.warn('⚠️ 收到 401 响应，清除 token')
+        
+        // 清除 token（避免登录接口本身的 401）
+        if (typeof window !== 'undefined' && !endpoint.includes('/login')) {
+          localStorage.removeItem('access_token')
+          localStorage.removeItem('user_id')
+          localStorage.removeItem('wallet_address')
+          localStorage.removeItem('wallet_chain')
+          
+          // 触发自定义事件，通知应用需要重新登录
+          window.dispatchEvent(new CustomEvent('auth:unauthorized'))
+        }
+      }
+      
       throw new ApiError(
         response.status,
         errorData.message || `请求失败: ${response.statusText}`,
@@ -78,21 +95,23 @@ async function request<T>(
 // GET 请求
 export async function get<T>(
   endpoint: string,
-  params?: Record<string, any>
+  params?: Record<string, any>,
+  config?: RequestConfig
 ): Promise<T> {
-  return request<T>(endpoint, { method: 'GET', params })
+  return request<T>(endpoint, { method: 'GET', params, ...config })
 }
 
 // POST 请求
 export async function post<T>(
   endpoint: string,
   data?: any,
-  params?: Record<string, any>
+  config?: RequestConfig
 ): Promise<T> {
   return request<T>(endpoint, {
     method: 'POST',
-    params,
+    params: config?.params,
     body: data ? JSON.stringify(data) : undefined,
+    ...config,
   })
 }
 

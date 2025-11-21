@@ -3,12 +3,12 @@
 import { useState } from 'react'
 import Sidebar from '@/components/Sidebar'
 import NewsStream from '@/components/NewsStream'
-import NewsAnalysis from '@/components/NewsAnalysis'
 import ThinkingProcess from '@/components/ThinkingProcess'
 import type { HistoryItem, Event } from '@/types'
 
 export default function Home() {
-  const [currentPage, setCurrentPage] = useState<'news-stream' | 'news-analysis' | 'thinking-process'>('news-stream')
+  const [currentPage, setCurrentPage] = useState<'news-stream' | 'thinking-process'>('news-stream')
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [thinkingParams, setThinkingParams] = useState<{ 
     eventId?: string; 
     eventTitle?: string; 
@@ -22,10 +22,6 @@ export default function Home() {
     setCurrentPage('thinking-process')
   }
 
-  const handleNavigateToNewsStream = () => {
-    setCurrentPage('news-stream')
-  }
-
   const handleHistoryItemClick = (item: HistoryItem) => {
     // 点击历史记录，跳转到 Thinking Process 页面并传入 session_id
     setThinkingParams({
@@ -37,33 +33,49 @@ export default function Home() {
     setCurrentPage('thinking-process')
   }
 
+  const handleUserSessionClick = (sessionId: string, title: string) => {
+    // 从用户会话历史跳转到会话，只传 session_id
+    setThinkingParams({
+      sessionId,
+    })
+    setCurrentPage('thinking-process')
+  }
+
+  const handleLoginSuccess = () => {
+    // 登录成功后刷新侧边栏的历史记录
+    setRefreshTrigger(prev => prev + 1)
+    console.log('✅ 登录成功，刷新历史记录')
+  }
+
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar 
+        key={refreshTrigger}
         currentPage={currentPage} 
         setCurrentPage={setCurrentPage}
         onHistoryItemClick={handleHistoryItemClick}
+        onUserSessionClick={handleUserSessionClick}
       />
-      <main className="flex-1 overflow-y-auto">
-        {currentPage === 'news-stream' && (
-          <NewsStream 
-            onNavigateToThinking={handleNavigateToThinking}
-          />
-        )}
-        {currentPage === 'news-analysis' && (
-          <NewsAnalysis 
-            onNavigateToNewsStream={handleNavigateToNewsStream}
-          />
-        )}
-        {currentPage === 'thinking-process' && (
-          <ThinkingProcess 
-            eventId={thinkingParams.eventId}
-            eventTitle={thinkingParams.eventTitle}
-            eventData={thinkingParams.eventData}
-            initialQuery={thinkingParams.query}
-            sessionId={thinkingParams.sessionId}
-          />
-        )}
+      <main className="flex-1 overflow-y-auto flex flex-col">
+        {/* 主内容区域 */}
+        <div className="flex-1">
+          {currentPage === 'news-stream' && (
+            <NewsStream 
+              onNavigateToThinking={handleNavigateToThinking}
+              onLoginSuccess={handleLoginSuccess}
+            />
+          )}
+          {currentPage === 'thinking-process' && (
+            <ThinkingProcess 
+              eventId={thinkingParams.eventId}
+              eventTitle={thinkingParams.eventTitle}
+              eventData={thinkingParams.eventData}
+              initialQuery={thinkingParams.query}
+              sessionId={thinkingParams.sessionId}
+              onLoginSuccess={handleLoginSuccess}
+            />
+          )}
+        </div>
       </main>
     </div>
   )
