@@ -111,9 +111,6 @@ export function useWalletAuth(): UseWalletAuthReturn {
     await login('ethereum', getEthereumAddress, signMessageEthereum);
   }, [login]);
 
-  /**
-   * Solana 钱包登录
-   */
   const loginWithSolana = useCallback(async () => {
     await login(
       'solana',
