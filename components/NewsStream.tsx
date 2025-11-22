@@ -204,7 +204,7 @@ export default function NewsStream({ onNavigateToThinking, onLoginSuccess }: New
             // Data State
             filteredEvents.map((event) => (
               <EventCard
-                key={event.id}
+                key={event.id} 
                 id={event.id}
                 title={event.title}
                 description={event.description}

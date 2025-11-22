@@ -1,6 +1,6 @@
 'use client'
 
-import { TrendingUp, MessageCircle, Clock, Flame, Star, Sparkles } from 'lucide-react'
+import { TrendingUp, MessageCircle, Clock, Flame, Star, Sparkles, Share2 } from 'lucide-react'
 import { useState } from 'react'
 
 interface Market {
@@ -64,7 +64,17 @@ export default function EventCard({
     return `$${num.toFixed(0)}`
   }
 
-  // 格式化概率
+  // 格式化概率 - 返回所有选项的概率数组
+  const formatProbabilities = (priceStr: string) => {
+    try {
+      const prices = JSON.parse(priceStr)
+      return prices.map((p: string) => Math.round(parseFloat(p) * 100))
+    } catch {
+      return [50, 50]
+    }
+  }
+
+  // 格式化单个概率
   const formatProbability = (priceStr: string) => {
     try {
       const prices = JSON.parse(priceStr)
@@ -105,197 +115,147 @@ export default function EventCard({
 
   const hotness = getHotness()
   const displayImage = image || icon
-  const topMarkets = markets.slice(0, 3) // 显示前3个市场
+  
+  // 判断市场类型
+  const marketCount = markets.length
+  const isBinaryMarket = marketCount === 1 // YES/NO 市场
+  const isProbabilityListMarket = marketCount >= 2 // 2个或以上选项，都显示列表样式
 
   return (
     <div
-      className={`bg-[#1A1A2E] border-2 rounded-xl overflow-hidden transition-all duration-300 cursor-pointer group ${
-        isHovered ? 'border-purple-500 shadow-lg shadow-purple-500/20 scale-[1.02]' : 'border-gray-800'
+      className={`bg-[#1A1A2E] border rounded-2xl overflow-hidden transition-all duration-200 group ${
+        isHovered ? 'border-gray-600' : 'border-gray-800'
       } ${closed ? 'opacity-60' : ''}`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      onClick={onClick}
     >
-      {/* 图片区域 */}
-      {displayImage && (
-        <div className="relative h-48 w-full overflow-hidden">
-          <img
-            src={displayImage}
-            alt={title}
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-          />
-          
-          {/* 渐变遮罩 */}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#1A1A2E] via-transparent to-transparent" />
-          
-          {/* 标签 */}
-          <div className="absolute top-3 left-3 flex gap-2">
-            {featured && (
-              <span className="flex items-center gap-1 px-2 py-1 bg-yellow-500/20 backdrop-blur-sm border border-yellow-500/30 rounded-full text-xs font-semibold text-yellow-400">
-                <Star className="w-3 h-3 fill-yellow-400" />
-                Featured
-              </span>
-            )}
-            {isNew && (
-              <span className="flex items-center gap-1 px-2 py-1 bg-purple-500/20 backdrop-blur-sm border border-purple-500/30 rounded-full text-xs font-semibold text-purple-400">
-                <Sparkles className="w-3 h-3" />
-                New
-              </span>
-            )}
-            {hotness && (
-              <span className={`flex items-center gap-1 px-2 py-1 bg-black/40 backdrop-blur-sm border border-${hotness.color.replace('text-', '')}/30 rounded-full text-xs font-semibold ${hotness.color}`}>
-                <hotness.icon className="w-3 h-3" />
-                {hotness.label}
-              </span>
-            )}
-          </div>
-
-          {/* 右上角时间 */}
-          {endDate && !closed && (
-            <div className="absolute top-3 right-3 flex items-center gap-1 px-2 py-1 bg-black/40 backdrop-blur-sm rounded-full text-xs text-gray-300">
-              <Clock className="w-3 h-3" />
-              {getTimeRemaining(endDate)}
-            </div>
-          )}
-
-          {closed && (
-            <div className="absolute top-3 right-3 px-3 py-1 bg-red-500/20 backdrop-blur-sm border border-red-500/30 rounded-full text-xs font-semibold text-red-400">
-              CLOSED
-            </div>
-          )}
-        </div>
-      )}
-
       {/* 内容区域 */}
       <div className="p-5">
-        {/* 标题 */}
-        <h3 className="text-lg font-bold mb-3 line-clamp-2 group-hover:text-purple-400 transition-colors">
-          {title}
-        </h3>
+        {/* 顶部：图标 + 标题 */}
+        <div className="flex items-start gap-3 mb-4">
+          {displayImage && (
+            <div className="flex-shrink-0 w-10 h-10 rounded-lg overflow-hidden bg-gray-800">
+              <img
+                src={displayImage}
+                alt={title}
+                className="w-full h-full object-cover"
+              />
+            </div>
+          )}
+          <h3 className="flex-1 text-sm font-semibold leading-snug line-clamp-2">
+            {title}
+          </h3>
+        </div>
 
-        {/* 描述（可选） */}
-        {description && (
-          <p className="text-sm text-gray-400 mb-4 line-clamp-2">
-            {description}
-          </p>
+        {/* 市场选项按钮 */}
+        {isBinaryMarket && (
+          // YES/NO 二选项市场
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+              }}
+              className="h-[32px] w-full bg-green-600/20 hover:bg-green-600/30 border border-green-600/40 rounded-lg font-semibold text-sm text-green-400 transition-colors"
+            >
+              YES
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+              }}
+              className="h-[32px] w-full bg-transparent hover:bg-red-600/10 border border-red-600/50 rounded-lg font-semibold text-sm text-red-400 transition-colors"
+            >
+              NO
+            </button>
+          </div>
         )}
 
-        {/* 市场选项 */}
-        {topMarkets.length > 0 && (
-          <div className="space-y-2 mb-4">
-            {topMarkets.map((market) => {
+        {isProbabilityListMarket && (
+          // 多选项列表（显示概率和 Yes/No 按钮）- 固定显示2条，超出可滚动
+          <div 
+            className="space-y-2 mb-3 overflow-y-auto pr-1"
+            style={{
+              maxHeight: '60px', // 固定高度，约2条记录
+              scrollbarWidth: 'thin',
+              scrollbarColor: 'rgba(75, 85, 99, 0.5) transparent'
+            }}
+          >
+            {markets.map((market) => {
               const probability = formatProbability(market.outcomePrices)
-              const isHighProbability = probability >= 70
-              const isMediumProbability = probability >= 40 && probability < 70
+              const isHighProb = probability >= 60
               
               return (
                 <div
                   key={market.id}
-                  className="flex items-center justify-between p-3 bg-[#0F0F23] rounded-lg border border-gray-800 hover:border-gray-700 transition-colors"
+                  className="flex items-center gap-3 px-2  rounded-lg"
                 >
-                  <span className="text-sm font-medium flex-1 truncate">
-                    {market.groupItemTitle}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <div className="w-16 h-2 bg-gray-800 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full transition-all ${
-                          isHighProbability
-                            ? 'bg-green-500'
-                            : isMediumProbability
-                            ? 'bg-yellow-500'
-                            : 'bg-red-500'
-                        }`}
-                        style={{ width: `${probability}%` }}
-                      />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm  truncate">
+                      {market.groupItemTitle}
                     </div>
-                    <span
-                      className={`text-sm font-bold w-10 text-right ${
-                        isHighProbability
-                          ? 'text-green-400'
-                          : isMediumProbability
-                          ? 'text-yellow-400'
-                          : 'text-red-400'
-                      }`}
+                  </div>
+                  <div className="text-[14px] font-medium flex-shrink-0">
+                    {probability}%
+                  </div>
+                  <div className="flex gap-1.5 flex-shrink-0">
+                    <button
+                      onClick={(e) => e.stopPropagation()}
+                      className={`px-[8px] py-[2px] text-[rgba(211,251,122,1)] text-[12px]
+                        border border-[rgba(211,251,122,1)] rounded-[6px] font-medium
+                        `}
                     >
-                      {probability}%
-                    </span>
+                      Yes
+                    </button>
+                    <button
+                      onClick={(e) => e.stopPropagation()}
+                      className="px-[8px] py-[2px] text-[rgba(255,92,92,1)] text-[12px]
+                        border border-[rgba(255,92,92,1)] rounded-[6px] font-medium
+                        "
+                    >
+                      No
+                    </button>
                   </div>
                 </div>
               )
             })}
-            
-            {markets.length > 3 && (
-              <div className="text-xs text-center text-gray-500 pt-1">
-                +{markets.length - 3} more options
-              </div>
-            )}
           </div>
         )}
 
-        {/* 统计信息 */}
-        <div className="flex items-center justify-between text-sm mb-4 pb-4 border-b border-gray-800">
-          <div className="flex items-center gap-4">
+        {/* Analysis 按钮 */}
+        {onAnalysisClick && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onAnalysisClick()
+            }}
+            className="w-full h-[40px]  bg-[rgba(43,48,64,1)] hover:bg-purple-700 rounded-lg font-medium text-[14px] transition-colors mb-3"
+          >
+            Analysis
+          </button>
+        )}
+
+        {/* 底部：交易量 + 平台信息 */}
+        <div className="flex items-center justify-between text-xs text-gray-400">
+          <div className="flex items-center gap-1">
             {volume24hr !== undefined && (
-              <div className="flex flex-col">
-                <span className="text-gray-500 text-xs">24h Volume</span>
-                <span className="font-semibold text-green-400">{formatNumber(volume24hr)}</span>
-              </div>
+              <span>{formatNumber(volume24hr)} Vol.EPL</span>
             )}
-            {liquidity !== undefined && (
-              <div className="flex flex-col">
-                <span className="text-gray-500 text-xs">Liquidity</span>
-                <span className="font-semibold text-blue-400">{formatNumber(liquidity)}</span>
-              </div>
+            {!volume24hr && volume && (
+              <span>{formatNumber(volume)} Vol.EPL</span>
+            )}
+            {endDate && (
+              <>
+                <span>•</span>
+                <Clock className="w-3 h-3 inline" />
+                <span>{getTimeRemaining(endDate)}</span>
+              </>
             )}
           </div>
           
-          {commentCount !== undefined && commentCount > 0 && (
-            <div className="flex items-center gap-1 text-gray-400">
-              <MessageCircle className="w-4 h-4" />
-              <span>{commentCount}</span>
-            </div>
-          )}
-        </div>
+          <div className="flex items-center gap-1.5">
+            <img src="/ploy.png" className='w-[20px] h-[20px]' alt="" />
 
-        {/* 竞争度指示器 */}
-        {competitive !== undefined && (
-          <div className="mb-4">
-            <div className="flex justify-between text-xs text-gray-500 mb-1">
-              <span>Competitiveness</span>
-              <span>{Math.round(competitive * 100)}%</span>
-            </div>
-            <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-purple-600 to-pink-500 transition-all"
-                style={{ width: `${competitive * 100}%` }}
-              />
-            </div>
           </div>
-        )}
-
-        {/* 操作按钮 */}
-        <div className="flex gap-2">
-          {/* <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onClick?.()
-            }}
-            className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-lg font-semibold transition-colors"
-          >
-            Trade
-          </button> */}
-          {onAnalysisClick && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                onAnalysisClick()
-              }}
-              className="flex-1 bg-[#16213E] hover:bg-[#1e2949] text-white py-2.5 rounded-lg font-semibold transition-colors"
-            >
-              Analysis
-            </button>
-          )}
         </div>
       </div>
     </div>

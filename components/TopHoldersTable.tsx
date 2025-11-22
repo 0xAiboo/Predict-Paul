@@ -100,16 +100,16 @@ export default function TopHoldersTable({ topHoldersData, index = 0 }: TopHolder
       };
     } else {
       // 🔄 旧格式：持有者数据统计
-      const totalAmount = holders.reduce((sum, holder) => sum + holder.amount, 0);
-      const verifiedCount = holders.filter(h => h.verified).length;
-      const avgAmount = holders.length > 0 ? totalAmount / holders.length : 0;
-      const maxHolder = holders.length > 0 ? holders.reduce((max, h) => h.amount > max.amount ? h : max, holders[0]) : null;
-      
-      return {
-        totalAmount,
-        verifiedCount,
-        avgAmount,
-        maxHolder,
+    const totalAmount = holders.reduce((sum, holder) => sum + holder.amount, 0);
+    const verifiedCount = holders.filter(h => h.verified).length;
+    const avgAmount = holders.length > 0 ? totalAmount / holders.length : 0;
+    const maxHolder = holders.length > 0 ? holders.reduce((max, h) => h.amount > max.amount ? h : max, holders[0]) : null;
+    
+    return {
+      totalAmount,
+      verifiedCount,
+      avgAmount,
+      maxHolder,
         holderCount: holders.length,
         tradeCount: 0,
         uniqueTraders: 0,
@@ -118,7 +118,7 @@ export default function TopHoldersTable({ topHoldersData, index = 0 }: TopHolder
         avgPrice: 0,
         totalVolume: 0,
         maxTrade: null,
-      };
+    };
     }
   }, [holders, trades, isTradesMode]);
 
@@ -160,7 +160,7 @@ export default function TopHoldersTable({ topHoldersData, index = 0 }: TopHolder
               ? `Token: ${topHoldersData.token.slice(0, 8)}...${topHoldersData.token.slice(-8)}`
               : topHoldersData.token
             }
-          </div>
+        </div>
         )}
       </div>
 

@@ -59,22 +59,22 @@ export default function Home() {
       <main className="flex-1 overflow-y-auto flex flex-col">
         {/* 主内容区域 */}
         <div className="flex-1">
-          {currentPage === 'news-stream' && (
-            <NewsStream 
-              onNavigateToThinking={handleNavigateToThinking}
+        {currentPage === 'news-stream' && (
+          <NewsStream 
+            onNavigateToThinking={handleNavigateToThinking}
               onLoginSuccess={handleLoginSuccess}
-            />
-          )}
-          {currentPage === 'thinking-process' && (
-            <ThinkingProcess 
-              eventId={thinkingParams.eventId}
-              eventTitle={thinkingParams.eventTitle}
+          />
+        )}
+        {currentPage === 'thinking-process' && (
+          <ThinkingProcess 
+            eventId={thinkingParams.eventId}
+            eventTitle={thinkingParams.eventTitle}
               eventData={thinkingParams.eventData}
-              initialQuery={thinkingParams.query}
-              sessionId={thinkingParams.sessionId}
+            initialQuery={thinkingParams.query}
+            sessionId={thinkingParams.sessionId}
               onLoginSuccess={handleLoginSuccess}
-            />
-          )}
+          />
+        )}
         </div>
       </main>
     </div>
