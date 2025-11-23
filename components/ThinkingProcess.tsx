@@ -24,6 +24,7 @@ import PriceHistoryChart from "./PriceHistoryChart";
 import TopHoldersTable from "./TopHoldersTable";
 import WhaleTradesList from "./WhaleTradesList";
 import TwitterCard from "./TwitterCard";
+import NewsTable from "./NewsTable";
 import {
   analysisService,
   historyService,
@@ -110,6 +111,16 @@ interface TwitterCitation {
   url: string;
 }
 
+// 新闻文章数据结构
+interface NewsArticle {
+  title: string;
+  source: string;
+  time: string;
+  url: string;
+  icon?: string;
+  description?: string;
+}
+
 // Agent 数据结构
 interface AgentData {
   id: string;
@@ -130,6 +141,8 @@ interface AgentData {
   topHolders: TopHoldersData[];
   // Twitter 引用（主要用于 social agent）
   citations: TwitterCitation[];
+  // 新闻文章列表（主要用于 news agent）
+  newsArticles: NewsArticle[];
   // 新闻注释（主要用于 news agent）- 支持多个注释
   annotations: string[];
   // 🆕 Agent 分析结论（来自 tool_output）
@@ -203,6 +216,7 @@ export default function ThinkingProcess({
       priceHistory: [],
       topHolders: [],
       citations: [],
+      newsArticles: [],
       annotations: [],
     },
     {
@@ -250,6 +264,7 @@ export default function ThinkingProcess({
       priceHistory: [],
       topHolders: [],
       citations: [],
+      newsArticles: [],
       annotations: [],
     },
     {
@@ -293,6 +308,7 @@ export default function ThinkingProcess({
       priceHistory: [],
       topHolders: [],
       citations: [],
+      newsArticles: [],
       annotations: [],
     },
     {
@@ -343,6 +359,7 @@ export default function ThinkingProcess({
       priceHistory: [],
       topHolders: [],
       citations: [],
+      newsArticles: [],
       annotations: [],
     },
   ]);
@@ -1008,10 +1025,48 @@ export default function ThinkingProcess({
               annotation: annotationText.substring(0, 100),
             });
 
+            // 解析新闻数据：提取标题和 URL
+            // 格式示例："Monad public sale total commitments above ___ ? | Polymar... https://polymarket.com/event/..."
+            const urlMatch = annotationText.match(/(https?:\/\/[^\s]+)$/);
+            let newsArticle = null;
+            
+            if (urlMatch) {
+              const url = urlMatch[1];
+              // 提取标题（URL 之前的部分，去掉末尾空格）
+              const title = annotationText.substring(0, urlMatch.index).trim();
+              
+              // 从 URL 中提取来源（域名）
+              let source = "Unknown";
+              try {
+                const urlObj = new URL(url);
+                source = urlObj.hostname.replace("www.", "");
+              } catch (e) {
+                console.warn("无法解析 URL:", url);
+              }
+              
+              newsArticle = {
+                title: title || "Untitled",
+                source: source,
+                time: new Date().toISOString(),
+                url: url,
+                description: title,
+              };
+              
+              console.log("📰 解析的新闻文章:", newsArticle);
+            }
+
             setAgentsData((prev) =>
               prev.map((agent) => {
                 if (agent.type === agentType || agent.id === agentType) {
-                  // 将注释添加到 annotations 数组中，支持多个注释
+                  // 如果成功解析为新闻文章，添加到 newsArticles 数组
+                  if (newsArticle) {
+                    return {
+                      ...agent,
+                      newsArticles: [...agent.newsArticles, newsArticle],
+                      annotations: [...agent.annotations, annotationText],
+                    };
+                  }
+                  // 否则只添加到 annotations
                   return {
                     ...agent,
                     annotations: [...agent.annotations, annotationText],
@@ -1512,6 +1567,7 @@ export default function ThinkingProcess({
           priceHistory: selectedAgent.priceHistory,
           topHolders: selectedAgent.topHolders,
           citations: selectedAgent.citations,
+          newsArticles: selectedAgent.newsArticles,
           annotations: selectedAgent.annotations,
           conclusion: selectedAgent.conclusion,
         }
@@ -1526,6 +1582,7 @@ export default function ThinkingProcess({
           priceHistory: selectedAgent.priceHistory,
           topHolders: selectedAgent.topHolders,
           citations: selectedAgent.citations,
+          newsArticles: selectedAgent.newsArticles,
           annotations: selectedAgent.annotations,
           conclusion: selectedAgent.conclusion,
         };
@@ -1812,10 +1869,50 @@ export default function ThinkingProcess({
           {!isHistoryView && activeTab === "result" && (
             <>
               {displayData.finalText ? (
+                <>
+                  {/* 顶部：左边显示 Event，右边显示分析结果标题 */}
+                  <div className="flex items-start gap-6 mb-6">
+                    {/* 左边：Event 信息 */}
+                    <div className="flex-1 bg-[#1A1D2E] rounded-2xl p-6 border border-gray-800">
+                      <div className="flex items-center gap-2 mb-3">
+                        <svg
+                          width="20"
+                          height="20"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="text-blue-400"
+                        >
+                          <path
+                            d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM13 17H11V15H13V17ZM13 13H11V7H13V13Z"
+                            fill="currentColor"
+                          />
+                        </svg>
+                        <h3 className="text-lg font-semibold text-white">Event</h3>
+                      </div>
+                      <p className="text-gray-300 leading-relaxed">
+                        {question || query || "暂无问题信息"}
+                      </p>
+                    </div>
+
+                    {/* 右边：分析结果卡片 */}
+                    <div className="flex-1 bg-[#1A1D2E] rounded-2xl p-6 border border-gray-800">
+                      <div className="flex items-center gap-2 mb-3">
+                        <FileText className="w-5 h-5 text-green-400" />
+                        <h3 className="text-lg font-semibold text-white">分析结果</h3>
+                      </div>
+                      <p className="text-gray-300 leading-relaxed">
+                        {displayData.finalText.substring(0, 150)}
+                        {displayData.finalText.length > 150 ? "..." : ""}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 完整的分析结果内容 */}
                 <div className="bg-gradient-primary rounded-2xl p-8 animate-fadeInUp">
                   <div className="flex items-center gap-2 mb-4">
                     <FileText className="w-6 h-6" />
-                    <h2 className="text-2xl font-bold">分析结果</h2>
+                    <h2 className="text-2xl font-bold">完整分析</h2>
                     {isStreaming && (
                       <div className="flex gap-1 ml-2">
                         <div
@@ -1943,6 +2040,7 @@ export default function ThinkingProcess({
                     </ReactMarkdown>
                   </div>
                 </div>
+                </>
               ) : (
                 <div className="text-center py-16">
                   <div className="text-gray-400 text-lg">
@@ -2069,32 +2167,76 @@ export default function ThinkingProcess({
                 </div>
 
                 <div className="space-y-4">
-                  {/* 右侧内容区域标题 - 仅非 Social Agent 显示 */}
-                  {selectedAgent && selectedAgent.type !== "social" && (
-                    <div className="bg-[rgba(28,30,43,1)] rounded-lg p-4 border border-gray-800">
-                      <div className="text-sm text-gray-300 mb-3">
+                  {/* 所有 Agent 的内容都用紫色边框包裹 */}
+                  {selectedAgent && (
+                    <div className="relative border border-purple-500/50 rounded-2xl p-6 bg-[#0F0F23]">
+                      {/* 左侧箭头 - 作为边框延伸的尖角，动态对齐到选中的 Agent */}
+                      <div 
+                        className="absolute left-0"
+                        style={{
+                          top: `${agentsData.findIndex(a => a.id === selectedAgentId) * 90 + 45}px`
+                        }}
+                      >
+                        <svg
+                          width="20"
+                          height="40"
+                          viewBox="0 0 20 40"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="translate-x-[-19px]"
+                        >
+                          {/* 背景填充 - 与内容区背景一致 */}
+                          <path d="M19 0 L0 20 L19 40 Z" fill="#0F0F23" />
+                          {/* 上边框线 */}
+                          <path
+                            d="M19 0 L0 20"
+                            stroke="rgba(168, 85, 247, 0.5)"
+                            strokeWidth="1"
+                          />
+                          {/* 下边框线 */}
+                          <path
+                            d="M0 20 L19 40"
+                            stroke="rgba(168, 85, 247, 0.5)"
+                            strokeWidth="1"
+                          />
+                        </svg>
+                      </div>
+
+                      {/* 顶部状态 */}
+                      <div className="text-sm text-gray-300 mb-4">
                         {isStreaming && selectedAgent.status === "thinking"
                           ? "A few seconds, I'm trying to think..."
                           : selectedAgent.status === "completed"
                           ? "Analysis completed"
                           : "Waiting to start..."}
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-gray-400">
-                        <div className="w-4 h-4 rounded bg-green-500/20 flex items-center justify-center">
-                          <span className="text-green-400 text-[10px]">+</span>
-                        </div>
-                        <span className="font-medium">
-                          {selectedAgent.type === "news"
+
+                      {/* Agent 类型标签 */}
+                      <div className="flex items-center gap-2 text-sm mb-6">
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 16 16"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            d="M11.2074 10.2184L14.9736 9.30517C16.3424 8.97326 16.3424 7.02659 14.9736 6.69469L11.2074 5.78144C10.7187 5.66294 10.3372 5.28138 10.2187 4.7927L9.30541 1.02649C8.99425 -0.256716 7.26386 -0.336916 6.77529 0.785889C6.74272 0.860742 6.71567 0.940943 6.69492 1.02649L5.78168 4.7927C5.67059 5.25084 5.32829 5.61482 4.88327 5.75617C4.8536 5.7656 4.82348 5.77403 4.79294 5.78144L1.02673 6.69468C-0.256476 7.00584 -0.336672 8.73624 0.786133 9.2248C0.860987 9.25737 0.941187 9.28442 1.02673 9.30517L4.79294 10.2184C5.22054 10.3221 5.56611 10.6272 5.72521 11.0292C5.74794 11.0867 5.76687 11.1461 5.78168 11.2072L6.69492 14.9734C7.02683 16.3421 8.9735 16.3421 9.30541 14.9734L10.2187 11.2072C10.3372 10.7185 10.7187 10.3369 11.2074 10.2184Z"
+                            fill="#D3FB7A"
+                          />
+                        </svg>
+                        <span className="font-medium text-white">
+                          {selectedAgent.type === "social"
+                            ? "Related News"
+                            : selectedAgent.type === "news"
                             ? "News Analysis"
                             : selectedAgent.type === "tech"
                             ? "Technical Analysis"
                             : "Whales Activity"}
                         </span>
                       </div>
-                    </div>
-                  )}
 
-                  {selectedAgent.status === "completed" &&
+                      {/* {selectedAgent.status === "completed" &&
                     displayData.conclusion && (
                       <div className="bg-[#1A1A2E] border border-green-800 rounded-2xl p-6 animate-fadeIn">
                         <div className="flex items-center gap-3 mb-4">
@@ -2153,405 +2295,490 @@ export default function ThinkingProcess({
                           </ReactMarkdown>
                         </div>
                       </div>
-                    )}
+                    )} */}
 
-                  {/* News Agent: 只显示两行思考过程 */}
-                  {!displayData.conclusion && selectedAgent.type === "news" && (
-                    <div className="bg-[#1A1A2E] border border-gray-800 rounded-2xl p-6">
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="flex gap-1">
-                          <div
-                            className="w-2 h-2 bg-orange-400 rounded-full animate-bounce"
-                            style={{ animationDelay: "0ms" }}
-                          ></div>
-                          <div
-                            className="w-2 h-2 bg-orange-400 rounded-full animate-bounce"
-                            style={{ animationDelay: "150ms" }}
-                          ></div>
-                          <div
-                            className="w-2 h-2 bg-orange-400 rounded-full animate-bounce"
-                            style={{ animationDelay: "300ms" }}
-                          ></div>
-                        </div>
-                        <div className="text-gray-300 font-medium">
-                          思考过程
-                        </div>
-                      </div>
-                      {/* 固定两行高度，有滚动条，自动滚到底部 */}
-                      <div
-                        ref={(el) => {
-                          if (el && displayData.thinkingContent) {
-                            el.scrollTop = el.scrollHeight;
-                          }
-                        }}
-                        className="text-sm text-gray-300 leading-relaxed overflow-y-auto whitespace-pre-wrap"
-                        style={{
-                          maxHeight: "3rem", // 约两行高度 (1.5rem line-height * 2)
-                          scrollbarWidth: "thin",
-                          scrollbarColor: "rgba(251, 146, 60, 0.5) transparent",
-                        }}
-                      >
-                        {displayData.thinkingContent}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 市场数据可视化 (Tech/Whales Agent) */}
-                  {(selectedAgent.type === "tech" ||
-                    selectedAgent.type === "whales") && (
-                    <div className="space-y-6">
-                      {/* 订单簿数据 */}
-                      {displayData.orderbooks &&
-                        displayData.orderbooks.length > 0 && (
-                          <div className="space-y-4">
-                            {displayData.orderbooks.map((orderbook, idx) => (
-                              <OrderbookTable
-                                key={idx}
-                                orderbook={orderbook}
-                                index={idx}
+                      {/* News Agent: 思考过程 */}
+                      {selectedAgent.type === "news" && (
+                        <div className="bg-[#1A1A2E] border border-gray-800 rounded-2xl p-4 mb-[12px]">
+                          {/* 标题栏 */}
+                          <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-800">
+                            <svg
+                              width="24"
+                              height="24"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
+                              className="text-orange-400"
+                            >
+                              <path
+                                d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
+                                fill="currentColor"
                               />
-                            ))}
+                            </svg>
+                            <div className="text-white font-medium flex-1">
+                              正在思考
+                            </div>
                           </div>
-                        )}
 
-                      {/* 价格历史数据 */}
-                      {displayData.priceHistory &&
-                        displayData.priceHistory.length > 0 && (
-                          <div className="space-y-4">
-                            {displayData.priceHistory.map((history, idx) => (
-                              <PriceHistoryChart
-                                key={idx}
-                                priceHistory={history}
-                                index={idx}
-                              />
-                            ))}
-                          </div>
-                        )}
-
-                      {displayData.topHolders &&
-                        displayData.topHolders.length > 0 && (
-                          <div className="space-y-4">
-                            {displayData.topHolders.map(
-                              (topHoldersData, idx) => {
-                                // 🆕 如果有交易数据，使用新的交易列表展示
-                                const hasTrades =
-                                  topHoldersData.trades &&
-                                  topHoldersData.trades.length > 0;
-
-                                if (
-                                  hasTrades &&
-                                  selectedAgent.type === "whales"
-                                ) {
-                                  return (
-                                    <WhaleTradesList
-                                      key={idx}
-                                      tradesData={topHoldersData}
-                                    />
-                                  );
-                                }
-
-                                // 否则使用原来的表格展示
-                                return (
-                                  <TopHoldersTable
-                                    key={idx}
-                                    topHoldersData={topHoldersData}
-                                    index={idx}
-                                  />
-                                );
-                              }
+                          {/* 思考内容 - 固定高度显示2-3行 */}
+                          <div
+                            className="space-y-3 overflow-y-auto"
+                            style={{
+                              maxHeight: "4.5rem",
+                              scrollbarWidth: "thin",
+                              scrollbarColor: "rgba(251, 146, 60, 0.5) transparent",
+                            }}
+                          >
+                            {displayData.thinkingContent ? (
+                              displayData.thinkingContent
+                                .split("\n")
+                                .filter((line) => line.trim())
+                                .map((line, idx) => (
+                                  <div key={idx} className="flex gap-3">
+                                    <span className="text-gray-500 mt-1 flex-shrink-0">
+                                      •
+                                    </span>
+                                    <p className="text-sm text-gray-400 leading-relaxed flex-1">
+                                      {line.trim()}
+                                    </p>
+                                  </div>
+                                ))
+                            ) : (
+                              <div className="flex gap-3">
+                                <span className="text-gray-500 mt-1 flex-shrink-0">
+                                  •
+                                </span>
+                                <p className="text-sm text-gray-400 leading-relaxed flex-1">
+                                  正在分析相关新闻报道...
+                                </p>
+                              </div>
                             )}
-                          </div>
-                        )}
 
-                      {/* 市场数据加载提示 */}
-                      {isStreaming &&
-                        displayData.orderbooks.length === 0 &&
-                        displayData.priceHistory.length === 0 && (
-                          <div className="bg-[#1A1A2E] border border-gray-800 rounded-xl p-8 text-center">
-                            <div className="flex flex-col items-center gap-3">
-                              <div className="flex gap-1">
+                            {/* Loading 动画 */}
+                            {isStreaming && (
+                              <div className="flex gap-1 ml-6">
                                 <div
-                                  className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
+                                  className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-bounce"
                                   style={{ animationDelay: "0ms" }}
                                 ></div>
                                 <div
-                                  className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
+                                  className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-bounce"
                                   style={{ animationDelay: "150ms" }}
                                 ></div>
                                 <div
-                                  className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
+                                  className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-bounce"
                                   style={{ animationDelay: "300ms" }}
                                 ></div>
                               </div>
-                              <p className="text-sm text-gray-400">
-                                ⏳ 正在获取市场数据...
-                              </p>
-                            </div>
+                            )}
                           </div>
-                        )}
-                    </div>
-                  )}
+                        </div>
+                      )}
 
-                  {/* Twitter Citations - Social Agent */}
-                  {selectedAgent.type === "social" && (
-                    <div className="relative border border-purple-500/50 rounded-2xl p-6 bg-[#0F0F23]">
-                      {/* 左侧箭头 - 作为边框延伸的尖角 */}
-                      <div className="absolute left-0 top-[35px]">
-                        <svg
-                          width="20"
-                          height="40"
-                          viewBox="0 0 20 40"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="translate-x-[-19px]"
-                        >
-                          {/* 背景填充 - 与内容区背景一致 */}
-                          <path
-                            d="M19 0 L0 20 L19 40 Z"
-                            fill="#0F0F23"
-                          />
-                          {/* 上边框线 */}
-                          <path
-                            d="M19 0 L0 20"
-                            stroke="rgba(168, 85, 247, 0.5)"
-                            strokeWidth="1"
-                          />
-                          {/* 下边框线 */}
-                          <path
-                            d="M0 20 L19 40"
-                            stroke="rgba(168, 85, 247, 0.5)"
-                            strokeWidth="1"
-                          />
-                        </svg>
-                      </div>
-                      
-                      {/* 顶部状态 */}
-                      <div className="text-sm text-gray-300 mb-4">
-                        {isStreaming && selectedAgent.status === "thinking"
-                          ? "A few seconds, I'm trying to think..."
-                          : selectedAgent.status === "completed"
-                          ? "Analysis completed"
-                          : "Waiting to start..."}
-                      </div>
-                      {/* Related News 标签 */}
-                      <div className="flex items-center gap-2 text-sm mb-6">
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 16 16"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            d="M11.2074 10.2184L14.9736 9.30517C16.3424 8.97326 16.3424 7.02659 14.9736 6.69469L11.2074 5.78144C10.7187 5.66294 10.3372 5.28138 10.2187 4.7927L9.30541 1.02649C8.99425 -0.256716 7.26386 -0.336916 6.77529 0.785889C6.74272 0.860742 6.71567 0.940943 6.69492 1.02649L5.78168 4.7927C5.67059 5.25084 5.32829 5.61482 4.88327 5.75617C4.8536 5.7656 4.82348 5.77403 4.79294 5.78144L1.02673 6.69468C-0.256476 7.00584 -0.336672 8.73624 0.786133 9.2248C0.860987 9.25737 0.941187 9.28442 1.02673 9.30517L4.79294 10.2184C5.22054 10.3221 5.56611 10.6272 5.72521 11.0292C5.74794 11.0867 5.76687 11.1461 5.78168 11.2072L6.69492 14.9734C7.02683 16.3421 8.9735 16.3421 9.30541 14.9734L10.2187 11.2072C10.3372 10.7185 10.7187 10.3369 11.2074 10.2184Z"
-                            fill="#D3FB7A"
-                          />
-                        </svg>
+                      {/* 市场数据可视化 (Tech/Whales Agent) */}
+                      {(selectedAgent.type === "tech" ||
+                        selectedAgent.type === "whales") && (
+                        <div className="space-y-6">
+                          {/* 订单簿数据 */}
+                          {displayData.orderbooks &&
+                            displayData.orderbooks.length > 0 && (
+                              <div className="space-y-4">
+                                {displayData.orderbooks.map(
+                                  (orderbook, idx) => (
+                                    <OrderbookTable
+                                      key={idx}
+                                      orderbook={orderbook}
+                                      index={idx}
+                                    />
+                                  )
+                                )}
+                              </div>
+                            )}
 
-                        <span className="font-medium text-white">
-                          Related News
-                        </span>
-                      </div>
-                      {/* Twitter 卡片瀑布流 */}
-                      {displayData.citations &&
-                        displayData.citations.length > 0 && (
-                          <div 
-                            className="columns-1 md:columns-2"
-                            style={{
-                              columnGap: '12px'
-                            }}
-                          >
-                            {displayData.citations.map((citation, idx) => (
-                              <div 
-                                key={citation.id_str} 
-                                className="break-inside-avoid inline-block w-full"
-                                style={{ marginBottom: '12px' }}
+                          {/* 价格历史数据 */}
+                          {displayData.priceHistory &&
+                            displayData.priceHistory.length > 0 && (
+                              <div className="space-y-4">
+                                {displayData.priceHistory.map(
+                                  (history, idx) => (
+                                    <PriceHistoryChart
+                                      key={idx}
+                                      priceHistory={history}
+                                      index={idx}
+                                    />
+                                  )
+                                )}
+                              </div>
+                            )}
+
+                          {displayData.topHolders &&
+                            displayData.topHolders.length > 0 && (
+                              <div className="space-y-4">
+                                {displayData.topHolders.map(
+                                  (topHoldersData, idx) => {
+                                    // 🆕 如果有交易数据，使用新的交易列表展示
+                                    const hasTrades =
+                                      topHoldersData.trades &&
+                                      topHoldersData.trades.length > 0;
+
+                                    if (
+                                      hasTrades &&
+                                      selectedAgent.type === "whales"
+                                    ) {
+                                      return (
+                                        <WhaleTradesList
+                                          key={idx}
+                                          tradesData={topHoldersData}
+                                        />
+                                      );
+                                    }
+
+                                    // 否则使用原来的表格展示
+                                    return (
+                                      <TopHoldersTable
+                                        key={idx}
+                                        topHoldersData={topHoldersData}
+                                        index={idx}
+                                      />
+                                    );
+                                  }
+                                )}
+                              </div>
+                            )}
+
+                          {/* 市场数据加载提示 */}
+                          {isStreaming &&
+                            displayData.orderbooks.length === 0 &&
+                            displayData.priceHistory.length === 0 && (
+                              <div className="bg-[#1A1A2E] border border-gray-800 rounded-xl p-8 text-center">
+                                <div className="flex flex-col items-center gap-3">
+                                  <div className="flex gap-1">
+                                    <div
+                                      className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
+                                      style={{ animationDelay: "0ms" }}
+                                    ></div>
+                                    <div
+                                      className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
+                                      style={{ animationDelay: "150ms" }}
+                                    ></div>
+                                    <div
+                                      className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
+                                      style={{ animationDelay: "300ms" }}
+                                    ></div>
+                                  </div>
+                                  <p className="text-sm text-gray-400">
+                                    ⏳ 正在获取市场数据...
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                        </div>
+                      )}
+
+                      {selectedAgent.type === "social" && (
+                        <>
+                        {/* !displayData.conclusion &&
+                            (!displayData.citations ||
+                              displayData.citations.length === 0) && */}
+                          { (
+                              <div className="bg-[#1A1A2E] border border-gray-800 rounded-2xl p-4 mb-[12px]">
+                                <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-800">
+                                  <svg
+                                    width="24"
+                                    height="24"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    className="text-blue-400"
+                                  >
+                                    <path
+                                      d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
+                                      fill="currentColor"
+                                    />
+                                  </svg>
+                                  <div className="text-white font-medium flex-1">
+                                    正在思考
+                                  </div>
+                                </div>
+
+                                <div 
+                                  className="space-y-3 overflow-y-auto"
+                                  style={{
+                                    maxHeight: "4.5rem",
+                                    scrollbarWidth: "thin",
+                                    scrollbarColor: "rgba(59, 130, 246, 0.5) transparent",
+                                  }}
+                                >
+                                  {displayData.thinkingContent ? (
+                                    displayData.thinkingContent
+                                      .split("\n")
+                                      .filter((line) => line.trim())
+                                      .map((line, idx) => (
+                                        <div key={idx} className="flex gap-3">
+                                          <span className="text-gray-500 mt-1 flex-shrink-0">
+                                            •
+                                          </span>
+                                          <p className="text-sm text-gray-400 leading-relaxed flex-1">
+                                            {line.trim()}
+                                          </p>
+                                        </div>
+                                      ))
+                                  ) : (
+                                    <div className="flex gap-3">
+                                      <span className="text-gray-500 mt-1 flex-shrink-0">
+                                        •
+                                      </span>
+                                      <p className="text-sm text-gray-400 leading-relaxed flex-1">
+                                        正在分析社交媒体数据，寻找相关讨论和观点...
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  {isStreaming && (
+                                    <div className="flex gap-1 ml-6">
+                                      <div
+                                        className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"
+                                        style={{ animationDelay: "0ms" }}
+                                      ></div>
+                                      <div
+                                        className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"
+                                        style={{ animationDelay: "150ms" }}
+                                      ></div>
+                                      <div
+                                        className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"
+                                        style={{ animationDelay: "300ms" }}
+                                      ></div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                          {displayData.citations &&
+                            displayData.citations.length > 0 && (
+                              <div
+                                className="columns-1 md:columns-2"
+                                style={{
+                                  columnGap: "12px",
+                                }}
                               >
-                                <TwitterCard {...citation} />
+                                {displayData.citations.map((citation, idx) => (
+                                  <div
+                                    key={citation.id_str}
+                                    className="break-inside-avoid inline-block w-full"
+                                    style={{ marginBottom: "12px" }}
+                                  >
+                                    <TwitterCard {...citation} />
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                        </>
+                      )}
+
+                      {/* News Agent: 新闻文章表格 - 优先显示 newsArticles */}
+                      {selectedAgent.type === "news" &&
+                        displayData.newsArticles &&
+                        displayData.newsArticles.length > 0 && (
+                          <NewsTable articles={displayData.newsArticles} />
+                        )}
+
+                      {/* News Agent: Annotations 卡片显示 - 仅当没有 newsArticles 时显示 */}
+                      {selectedAgent.type === "news" &&
+                        displayData.annotations.length > 0 &&
+                        (!displayData.newsArticles || displayData.newsArticles.length === 0) && (
+                          <>
+                            {displayData.annotations.map((annotation, idx) => (
+                                <div
+                                  key={idx}
+                                  className="bg-[#1A1A2E] border border-gray-800 rounded-xl p-5 animate-fadeInUp mb-3"
+                                >
+                                  {/* 卡片头部 */}
+                                  <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-800">
+                                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center flex-shrink-0">
+                                      <svg
+                                        width="20"
+                                        height="20"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                      >
+                                        <path
+                                          d="M19 3H5C3.89 3 3 3.9 3 5V19C3 20.1 3.89 21 5 21H19C20.1 21 21 20.1 21 19V5C21 3.9 20.1 3 19 3ZM19 19H5V7H19V19ZM7 9H17V11H7V9ZM7 13H17V15H7V13Z"
+                                          fill="white"
+                                        />
+                                      </svg>
+                                    </div>
+                                    <div className="flex-1">
+                                      <h3 className="text-white font-medium text-sm">
+                                        新闻分析结果{" "}
+                                        {displayData.annotations.length > 1
+                                          ? `(${idx + 1}/${displayData.annotations.length})`
+                                          : ""}
+                                      </h3>
+                                    </div>
+                                  </div>
+
+                                  {/* 卡片内容 */}
+                                  <div className="prose prose-invert prose-sm max-w-none">
+                                  <ReactMarkdown
+                                    remarkPlugins={[remarkGfm]}
+                                    components={{
+                                      h1: ({ node, ...props }) => (
+                                        <h1
+                                          className="text-lg font-semibold text-white mt-4 mb-2"
+                                          {...props}
+                                        />
+                                      ),
+                                      h2: ({ node, ...props }) => (
+                                        <h2
+                                          className="text-base font-semibold text-white mt-3 mb-2"
+                                          {...props}
+                                        />
+                                      ),
+                                      h3: ({ node, ...props }) => (
+                                        <h3
+                                          className="text-sm font-medium text-orange-300 mt-3 mb-1"
+                                          {...props}
+                                        />
+                                      ),
+                                      h4: ({ node, ...props }) => (
+                                        <h4
+                                          className="text-sm font-medium text-orange-400 mt-2 mb-1"
+                                          {...props}
+                                        />
+                                      ),
+                                      p: ({ node, ...props }) => (
+                                        <p
+                                          className="text-gray-400 text-sm mb-2 leading-relaxed"
+                                          {...props}
+                                        />
+                                      ),
+                                      ul: ({ node, ...props }) => (
+                                        <ul
+                                          className="list-disc list-inside mb-2 space-y-1 text-gray-400 text-sm ml-3"
+                                          {...props}
+                                        />
+                                      ),
+                                      ol: ({ node, ...props }) => (
+                                        <ol
+                                          className="list-decimal list-inside mb-2 space-y-1 text-gray-400 text-sm ml-3"
+                                          {...props}
+                                        />
+                                      ),
+                                      li: ({ node, ...props }) => (
+                                        <li
+                                          className="text-gray-400 text-sm"
+                                          {...props}
+                                        />
+                                      ),
+                                      a: ({ node, ...props }) => (
+                                        <a
+                                          className="text-blue-400 hover:text-blue-300 underline transition-colors text-sm"
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          {...props}
+                                        />
+                                      ),
+                                      blockquote: ({ node, ...props }) => (
+                                        <blockquote
+                                          className="border-l-2 border-gray-600 pl-3 py-1 mb-2 text-gray-400 text-sm italic"
+                                          {...props}
+                                        />
+                                      ),
+                                      code: ({ node, inline, ...props }: any) =>
+                                        inline ? (
+                                          <code
+                                            className="bg-gray-800 text-orange-300 px-1 py-0.5 rounded text-xs"
+                                            {...props}
+                                          />
+                                        ) : (
+                                          <code
+                                            className="block bg-gray-900 text-gray-300 p-2 rounded mb-2 overflow-x-auto text-xs"
+                                            {...props}
+                                          />
+                                        ),
+                                      strong: ({ node, ...props }) => (
+                                        <strong
+                                          className="font-semibold text-white"
+                                          {...props}
+                                        />
+                                      ),
+                                      em: ({ node, ...props }) => (
+                                        <em
+                                          className="italic text-gray-400"
+                                          {...props}
+                                        />
+                                      ),
+                                      hr: ({ node, ...props }) => (
+                                        <hr
+                                          className="border-gray-700 my-3"
+                                          {...props}
+                                        />
+                                      ),
+                                      table: ({ node, ...props }) => (
+                                        <div className="overflow-x-auto mb-3">
+                                          <table
+                                            className="min-w-full border border-gray-700 text-sm"
+                                            {...props}
+                                          />
+                                        </div>
+                                      ),
+                                      th: ({ node, ...props }) => (
+                                        <th
+                                          className="border border-gray-700 px-2 py-1 bg-gray-800 text-white font-medium text-left text-xs"
+                                          {...props}
+                                        />
+                                      ),
+                                      td: ({ node, ...props }) => (
+                                        <td
+                                          className="border border-gray-700 px-2 py-1 text-gray-400 text-xs"
+                                          {...props}
+                                        />
+                                      ),
+                                    }}
+                                  >
+                                    {annotation}
+                                  </ReactMarkdown>
+                                </div>
+                                </div>
+                            ))}
+                          </>
+                        )}
+
+                      {displayData.logs.length > 0 && (
+                        <div className="bg-[#1A1A2E] border border-gray-800 rounded-2xl p-6 animate-fadeInUp">
+                          <div className="flex items-center gap-2 mb-4">
+                            <Lightbulb className="w-5 h-5 text-yellow-400" />
+                            <h3 className="text-lg font-semibold">日志</h3>
+                          </div>
+                          <div className="space-y-2 max-h-64 overflow-y-auto scrollbar-hide">
+                            {displayData.logs.map((log, idx) => (
+                              <div
+                                key={log.id}
+                                className="text-xs font-mono text-gray-400 animate-fadeIn"
+                                style={{
+                                  animationDelay: `${idx * 50}ms`,
+                                  animationFillMode: "both",
+                                }}
+                              >
+                                <span
+                                  className={`inline-block w-16 ${
+                                    log.level === "error"
+                                      ? "text-red-400"
+                                      : log.level === "warn"
+                                      ? "text-yellow-400"
+                                      : "text-gray-500"
+                                  }`}
+                                >
+                                  [{log.level}]
+                                </span>
+                                <span className="ml-2">{log.message}</span>
                               </div>
                             ))}
                           </div>
-                        )}
-                    </div>
-                  )}
-
-                  {/* News Annotations - 只在 News Agent 显示所有最终分析结果 */}
-                  {selectedAgent.type === "news" &&
-                    displayData.annotations.length > 0 && (
-                      <div className="space-y-6">
-                        {displayData.annotations.map((annotation, idx) => (
-                          <div
-                            key={idx}
-                            className="bg-[#1A1A2E] border border-gray-800 rounded-2xl p-6 animate-fadeInUp"
-                          >
-                            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                              <span className="text-2xl">📰</span>
-                              <span>
-                                新闻分析结果{" "}
-                                {displayData.annotations.length > 1
-                                  ? `(${idx + 1}/${
-                                      displayData.annotations.length
-                                    })`
-                                  : ""}
-                              </span>
-                            </h2>
-                            <div className="prose prose-invert prose-sm max-w-none">
-                              <ReactMarkdown
-                                remarkPlugins={[remarkGfm]}
-                                components={{
-                                  h1: ({ node, ...props }) => (
-                                    <h1
-                                      className="text-2xl font-bold text-white mt-6 mb-4"
-                                      {...props}
-                                    />
-                                  ),
-                                  h2: ({ node, ...props }) => (
-                                    <h2
-                                      className="text-xl font-bold text-white mt-5 mb-3"
-                                      {...props}
-                                    />
-                                  ),
-                                  h3: ({ node, ...props }) => (
-                                    <h3
-                                      className="text-lg font-semibold text-orange-300 mt-4 mb-2"
-                                      {...props}
-                                    />
-                                  ),
-                                  h4: ({ node, ...props }) => (
-                                    <h4
-                                      className="text-base font-semibold text-orange-400 mt-3 mb-2"
-                                      {...props}
-                                    />
-                                  ),
-                                  p: ({ node, ...props }) => (
-                                    <p
-                                      className="text-gray-300 mb-3 leading-relaxed"
-                                      {...props}
-                                    />
-                                  ),
-                                  ul: ({ node, ...props }) => (
-                                    <ul
-                                      className="list-disc list-inside mb-3 space-y-1 text-gray-300"
-                                      {...props}
-                                    />
-                                  ),
-                                  ol: ({ node, ...props }) => (
-                                    <ol
-                                      className="list-decimal list-inside mb-3 space-y-1 text-gray-300"
-                                      {...props}
-                                    />
-                                  ),
-                                  li: ({ node, ...props }) => (
-                                    <li
-                                      className="text-gray-300 ml-2"
-                                      {...props}
-                                    />
-                                  ),
-                                  a: ({ node, ...props }) => (
-                                    <a
-                                      className="text-orange-400 hover:text-orange-300 underline transition-colors"
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      {...props}
-                                    />
-                                  ),
-                                  blockquote: ({ node, ...props }) => (
-                                    <blockquote
-                                      className="border-l-4 border-orange-500 pl-4 py-2 mb-3 text-gray-400 italic bg-orange-900/10"
-                                      {...props}
-                                    />
-                                  ),
-                                  code: ({ node, inline, ...props }: any) =>
-                                    inline ? (
-                                      <code
-                                        className="bg-gray-800 text-orange-300 px-1.5 py-0.5 rounded text-sm"
-                                        {...props}
-                                      />
-                                    ) : (
-                                      <code
-                                        className="block bg-gray-900 text-green-300 p-3 rounded-lg mb-3 overflow-x-auto text-sm"
-                                        {...props}
-                                      />
-                                    ),
-                                  strong: ({ node, ...props }) => (
-                                    <strong
-                                      className="font-bold text-white"
-                                      {...props}
-                                    />
-                                  ),
-                                  em: ({ node, ...props }) => (
-                                    <em
-                                      className="italic text-gray-400"
-                                      {...props}
-                                    />
-                                  ),
-                                  hr: ({ node, ...props }) => (
-                                    <hr
-                                      className="border-gray-700 my-4"
-                                      {...props}
-                                    />
-                                  ),
-                                  table: ({ node, ...props }) => (
-                                    <div className="overflow-x-auto mb-4">
-                                      <table
-                                        className="min-w-full border border-gray-700"
-                                        {...props}
-                                      />
-                                    </div>
-                                  ),
-                                  th: ({ node, ...props }) => (
-                                    <th
-                                      className="border border-gray-700 px-3 py-2 bg-gray-800 text-white font-semibold text-left"
-                                      {...props}
-                                    />
-                                  ),
-                                  td: ({ node, ...props }) => (
-                                    <td
-                                      className="border border-gray-700 px-3 py-2 text-gray-300"
-                                      {...props}
-                                    />
-                                  ),
-                                }}
-                              >
-                                {annotation}
-                              </ReactMarkdown>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                  {displayData.logs.length > 0 && (
-                    <div className="bg-[#1A1A2E] border border-gray-800 rounded-2xl p-6 animate-fadeInUp">
-                      <div className="flex items-center gap-2 mb-4">
-                        <Lightbulb className="w-5 h-5 text-yellow-400" />
-                        <h3 className="text-lg font-semibold">日志</h3>
-                      </div>
-                      <div className="space-y-2 max-h-64 overflow-y-auto scrollbar-hide">
-                        {displayData.logs.map((log, idx) => (
-                          <div
-                            key={log.id}
-                            className="text-xs font-mono text-gray-400 animate-fadeIn"
-                            style={{
-                              animationDelay: `${idx * 50}ms`,
-                              animationFillMode: "both",
-                            }}
-                          >
-                            <span
-                              className={`inline-block w-16 ${
-                                log.level === "error"
-                                  ? "text-red-400"
-                                  : log.level === "warn"
-                                  ? "text-yellow-400"
-                                  : "text-gray-500"
-                              }`}
-                            >
-                              [{log.level}]
-                            </span>
-                            <span className="ml-2">{log.message}</span>
-                          </div>
-                        ))}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

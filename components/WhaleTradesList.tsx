@@ -65,16 +65,16 @@ export default function WhaleTradesList({ tradesData }: WhaleTradesListProps) {
   };
 
   return (
-    <div className="bg-[#1A1A2E] border border-gray-800 rounded-2xl p-6 animate-fadeIn">
+    <div className=" animate-fadeIn">
       {/* 标题区域 */}
-      <div className="flex items-center gap-3 mb-4">
+      {/* <div className="flex items-center gap-3 mb-4">
         <div className="flex items-center justify-center w-8 h-8 bg-green-500/10 rounded-lg">
           <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
           </svg>
         </div>
         <h3 className="text-xl font-bold text-white">Whales Activities</h3>
-      </div>
+      </div> */}
 
       {/* 简介文字 */}
     

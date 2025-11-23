@@ -42,7 +42,9 @@ export default function TwitterCard({
     const parts = text.split(urlRegex);
     
     return parts.map((part, index) => {
-      if (urlRegex.test(part)) {
+      // 使用新的正则表达式来测试，避免全局标志的 lastIndex 问题
+      const isUrl = /^https?:\/\/[^\s]+$/.test(part);
+      if (isUrl) {
         return (
           <a
             key={index}
@@ -67,14 +69,14 @@ export default function TwitterCard({
         <div className="flex items-start gap-3 mb-3">
           {/* X (Twitter) 图标 */}
           <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center flex-shrink-0">
-            <svg
+              <svg
               className="w-4 h-4 text-black"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-            >
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
               <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-            </svg>
-          </div>
+              </svg>
+            </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-white font-medium text-sm">
@@ -85,7 +87,7 @@ export default function TwitterCard({
         </div>
 
         {/* 推文内容 */}
-        <div className="text-gray-300 text-sm mb-3 leading-relaxed whitespace-pre-wrap break-words line-clamp-4">
+        <div className="text-gray-300 text-sm mb-3 leading-relaxed whitespace-pre-wrap break-words">
           {renderText(full_text)}
         </div>
 
@@ -99,7 +101,7 @@ export default function TwitterCard({
         >
           Show more
         </a>
-      </div>
+        </div>
     </div>
   );
 }
